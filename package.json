@@ -13,7 +13,8 @@
     "lucide-react": "^0.464.0",
     "pixi.js": "^8.6.3",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "react-dom": "^18.3.1",
+    "react-feather": "^2.0.10"
   },
   "devDependencies": {
     "@eslint/js": "^9.15.0",

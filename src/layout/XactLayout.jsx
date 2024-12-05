@@ -1,12 +1,22 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Image as ImageIcon, Save, Grid, Filter, MessageSquare, Maximize2, Minimize2 } from 'lucide-react';
-import * as PIXI from 'pixi.js';
-import FileMenu from '../components/FileMenu';
-import EditMenu from '../components/EditMenu';
-import ViewMenu from '../components/ViewMenu';
-import ModulesMenu from '../components/ModulesMenu';
-import SetupMenu from '../components/SetupMenu';
-import HelpMenu from '../components/HelpMenu';
+import React, { useState, useEffect, useRef } from "react";
+import {
+  Image as ImageIcon,
+  Save,
+  Grid,
+  Filter,
+  MessageSquare,
+  Maximize2,
+  Minimize2,
+} from "lucide-react";
+import * as PIXI from "pixi.js";
+import FileMenu from "../components/FileMenu";
+import EditMenu from "../components/EditMenu";
+import ViewMenu from "../components/ViewMenu";
+import ModulesMenu from "../components/ModulesMenu";
+import SetupMenu from "../components/SetupMenu";
+import HelpMenu from "../components/HelpMenu";
+import ImageViewer from "../components/ImageViewer";
+import ImageControls from "../components/ImageControls";
 
 const XactLayout = () => {
   const [activeMenu, setActiveMenu] = useState(null);
@@ -15,6 +25,8 @@ const XactLayout = () => {
   const menuRef = useRef(null);
   const pixiContainerRef = useRef(null);
   const pixiAppRef = useRef(null);
+  const spriteRef = useRef(null);
+  const [imageSize, setImageSize] = useState({ width: 384, height: 384 });
 
   const toggleMenu = (menu) => {
     setActiveMenu(activeMenu === menu ? null : menu);
@@ -26,54 +38,47 @@ const XactLayout = () => {
     }
   };
 
-  useEffect(() => {
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, []);
+  // 处理图像加载完成后的逻辑
+  const handleImageLoad = (sprite) => {
+    spriteRef.current = sprite;
 
-  useEffect(() => {
-    const initPixiApp = async () => {
-      if (pixiContainerRef.current) {
-        // 创建应用实例
-        const app = new PIXI.Application();
-        
-        // 使用 init() 方法初始化
-        await app.init({
-          width: pixiContainerRef.current.clientWidth,
-          height: pixiContainerRef.current.clientHeight,
-          backgroundColor: 0x000000,
-          antialias: true,
-        });
+    // 设置初始属性
+    sprite.anchor.set(0.5); // 设置旋转中心点
+    sprite.interactive = true; // 启用交互
+    sprite.buttonMode = true; // 显示手型光标
 
-        // 使用 canvas 替代 view
-        pixiContainerRef.current.appendChild(app.canvas);
-        pixiAppRef.current = app;
+    // 添加拖拽功能
+    let isDragging = false;
+    let dragStart = { x: 0, y: 0 };
 
-        // 加载并显示图像
-        const loadAndDisplayImage = async (imageUrl) => {
-          await PIXI.Assets.load(imageUrl);
-          const sprite = PIXI.Sprite.from(imageUrl);
-          sprite.width = 384; // 设置精灵宽度
-          sprite.height = 384; // 设置精灵高度
-          sprite.x = (app.screen.width - sprite.width) / 2; // 居中显示
-          sprite.y = (app.screen.height - sprite.height) / 2; // 居中显示
-          app.stage.addChild(sprite);
-        };
+    sprite.on("pointerdown", (event) => {
+      isDragging = true;
+      dragStart = {
+        x: event.data.global.x - sprite.x,
+        y: event.data.global.y - sprite.y,
+      };
+    });
 
-        // 示例图像 URL
-        const imageUrl = 'https://pixijs.com/assets/files/sample-747abf529b135a1f549dff3ec846afbc.png';
-        await loadAndDisplayImage(imageUrl);
+    sprite.on("pointermove", (event) => {
+      if (isDragging) {
+        sprite.x = event.data.global.x - dragStart.x;
+        sprite.y = event.data.global.y - dragStart.y;
       }
-    };
+    });
 
-    initPixiApp().catch(console.error);
+    sprite.on("pointerup", () => {
+      isDragging = false;
+    });
 
+    sprite.on("pointerupoutside", () => {
+      isDragging = false;
+    });
+  };
+
+  useEffect(() => {
+    document.addEventListener("mousedown", handleClickOutside);
     return () => {
-      if (pixiAppRef.current) {
-        pixiAppRef.current.destroy(true, { children: true, texture: true, baseTexture: true });
-      }
+      document.removeEventListener("mousedown", handleClickOutside);
     };
   }, []);
 
@@ -107,79 +112,111 @@ const XactLayout = () => {
         >
           <button
             className="px-3 py-1 text-sm hover:bg-gray-200 rounded"
-            onClick={() => toggleMenu('file')}
+            onClick={() => toggleMenu("file")}
           >
             File
           </button>
           <button
             className="px-3 py-1 text-sm hover:bg-gray-200 rounded"
-            onClick={() => toggleMenu('edit')}
+            onClick={() => toggleMenu("edit")}
           >
             Edit
           </button>
           <button
             className="px-3 py-1 text-sm hover:bg-gray-200 rounded"
-            onClick={() => toggleMenu('view')}
+            onClick={() => toggleMenu("view")}
           >
             View
           </button>
           <button
             className="px-3 py-1 text-sm hover:bg-gray-200 rounded"
-            onClick={() => toggleMenu('modules')}
+            onClick={() => toggleMenu("modules")}
           >
             Modules
           </button>
           <button
             className="px-3 py-1 text-sm hover:bg-gray-200 rounded"
-            onClick={() => toggleMenu('setup')}
+            onClick={() => toggleMenu("setup")}
           >
             Setup
           </button>
           <button
             className="px-3 py-1 text-sm hover:bg-gray-200 rounded"
-            onClick={() => toggleMenu('help')}
+            onClick={() => toggleMenu("help")}
           >
             Help
           </button>
 
-          {activeMenu === 'file' && <FileMenu />}
-          {activeMenu === 'edit' && <EditMenu />}
-          {activeMenu === 'view' && <ViewMenu />}
-          {activeMenu === 'modules' && <ModulesMenu />}
-          {activeMenu === 'setup' && <SetupMenu />}
-          {activeMenu === 'help' && <HelpMenu />}
+          {activeMenu === "file" && <FileMenu />}
+          {activeMenu === "edit" && <EditMenu />}
+          {activeMenu === "view" && <ViewMenu />}
+          {activeMenu === "modules" && <ModulesMenu />}
+          {activeMenu === "setup" && <SetupMenu />}
+          {activeMenu === "help" && <HelpMenu />}
         </div>
 
         {/* Main Workspace */}
-        <div className={`flex-1 flex flex-col lg:flex-row ${isExpanded ? 'fixed inset-0 z-40' : ''}`}>
-          {/* Image View Area */}                    
-          <div 
-            className={`flex-1 bg-black relative ${isExpanded ? 'w-full h-full' : ''}`} 
-            style={{ 
-              width: '500px',  // 设置固定宽度
-              height: '500px', // 设置固定高度
-              position: 'relative'
-            }} 
+        <div
+          className={`flex-1 flex flex-col lg:flex-row ${
+            isExpanded ? "fixed inset-0 z-40" : ""
+          }`}
+        >
+          {/* Image View Area */}
+          <div
+            className={`flex-1 bg-black relative ${
+              isExpanded ? "w-full h-full" : ""
+            }`}
+            style={{
+              width: "500px",
+              height: "500px",
+              position: "relative",
+            }}
           >
-            <div className="absolute top-4 right-4 flex gap-2">
-              <button 
-                className="p-2 bg-gray-800 text-white rounded hover:bg-gray-700"
-                onClick={() => setIsExpanded(!isExpanded)}
-              >
-                {isExpanded ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
-              </button>
-            </div>
-            {/* PIXI 容器 */}
-            <div 
-              ref={pixiContainerRef}
-              style={{ 
-                width: '100%',
-                height: '100%',
-                position: 'absolute',
-                top: 0,
-                left: 0
+            <ImageControls
+              isExpanded={isExpanded}
+              onToggleExpand={() => setIsExpanded(!isExpanded)}
+              onRotate={(angle) => {
+                if (spriteRef.current) {
+                  spriteRef.current.rotation += (angle * Math.PI) / 180;
+                }
+              }}
+              onZoom={(factor) => {
+                if (spriteRef.current) {
+                  spriteRef.current.scale.x *= factor;
+                  spriteRef.current.scale.y *= factor;
+                }
+              }}
+              onReset={() => {
+                if (spriteRef.current) {
+                  spriteRef.current.rotation = 0;
+                  spriteRef.current.scale.set(1);
+                  spriteRef.current.position.set(
+                    pixiAppRef.current.screen.width / 2,
+                    pixiAppRef.current.screen.height / 2
+                  );
+                }
+              }}
+              onEnhance={() => {
+                if (spriteRef.current) {
+                  const filters = spriteRef.current.filters || [];
+                  if (filters.length === 0) {
+                    // 添加多个滤镜效果
+                    const colorMatrix = new PIXI.filters.ColorMatrixFilter();
+                    const blur = new PIXI.filters.BlurFilter();
+                    blur.blur = 0.5;
+
+                    spriteRef.current.filters = [colorMatrix, blur];
+
+                    // 调整颜色矩阵
+                    colorMatrix.brightness(1.2); // 增加亮度
+                    colorMatrix.contrast(1.1); // 增加对比度
+                  } else {
+                    spriteRef.current.filters = [];
+                  }
+                }
               }}
             />
+            <ImageViewer onImageLoad={handleImageLoad} />
           </div>
 
           {/* Right Control Panel */}
@@ -191,11 +228,13 @@ const XactLayout = () => {
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
                     <span className="text-sm">X-ray Power</span>
-                    <button 
-                      className={`px-4 py-2 rounded ${xrayOn ? 'bg-red-600' : 'bg-gray-200'} text-white`}
+                    <button
+                      className={`px-4 py-2 rounded ${
+                        xrayOn ? "bg-red-600" : "bg-gray-200"
+                      } text-white`}
                       onClick={() => setXrayOn(!xrayOn)}
                     >
-                      {xrayOn ? 'ON' : 'OFF'}
+                      {xrayOn ? "ON" : "OFF"}
                     </button>
                   </div>
                   <div className="space-y-2">
@@ -213,12 +252,24 @@ const XactLayout = () => {
               <div className="p-4 border-b">
                 <h3 className="text-sm font-semibold mb-4">Navigation</h3>
                 <div className="grid grid-cols-3 gap-2">
-                  <button className="p-2 border rounded hover:bg-gray-50">X+</button>
-                  <button className="p-2 border rounded hover:bg-gray-50">Y+</button>
-                  <button className="p-2 border rounded hover:bg-gray-50">Z+</button>
-                  <button className="p-2 border rounded hover:bg-gray-50">X-</button>
-                  <button className="p-2 border rounded hover:bg-gray-50">Y-</button>
-                  <button className="p-2 border rounded hover:bg-gray-50">Z-</button>
+                  <button className="p-2 border rounded hover:bg-gray-50">
+                    X+
+                  </button>
+                  <button className="p-2 border rounded hover:bg-gray-50">
+                    Y+
+                  </button>
+                  <button className="p-2 border rounded hover:bg-gray-50">
+                    Z+
+                  </button>
+                  <button className="p-2 border rounded hover:bg-gray-50">
+                    X-
+                  </button>
+                  <button className="p-2 border rounded hover:bg-gray-50">
+                    Y-
+                  </button>
+                  <button className="p-2 border rounded hover:bg-gray-50">
+                    Z-
+                  </button>
                 </div>
               </div>
 
