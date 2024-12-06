@@ -1,5 +1,4 @@
 // src/components/ImageControls.jsx
-import { useState } from "react";
 import PropTypes from "prop-types";
 import {
   Minimize2,
@@ -8,7 +7,6 @@ import {
   RotateCw,
   ZoomIn,
   ZoomOut,
-  Image,
   RefreshCw,
 } from "react-feather";
 
@@ -18,10 +16,7 @@ const ImageControls = ({
   onRotate,
   onZoom,
   onReset,
-  onEnhance,
 }) => {
-  const [activeControl, setActiveControl] = useState(null);
-
   return (
     <div className="absolute bottom-4 left-4 flex flex-col gap-4">
       {/* 主控制面板 */}
@@ -73,27 +68,7 @@ const ImageControls = ({
         >
           <RefreshCw className="w-4 h-4" />
         </button>
-
-        {/* 图像增强 */}
-        <button
-          className={`p-2 ${
-            activeControl === "enhance" ? "bg-blue-600" : "bg-gray-700"
-          } text-white rounded hover:bg-gray-600`}
-          onClick={() => {
-            setActiveControl(activeControl === "enhance" ? null : "enhance");
-            onEnhance();
-          }}
-        >
-          <Image className="w-4 h-4" />
-        </button>
       </div>
-
-      {/* 图像状态信息 */}
-      {activeControl === "enhance" && (
-        <div className="bg-gray-800 bg-opacity-75 p-2 rounded-lg text-white text-xs">
-          图像增强模式已启用
-        </div>
-      )}
     </div>
   );
 };
@@ -107,4 +82,3 @@ ImageControls.propTypes = {
 };
 
 export default ImageControls;
-

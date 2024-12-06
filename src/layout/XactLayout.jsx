@@ -6,7 +6,6 @@ import {
   Filter,
   MessageSquare,
 } from "lucide-react";
-import * as PIXI from "pixi.js";
 import FileMenu from "../components/FileMenu";
 import EditMenu from "../components/EditMenu";
 import ViewMenu from "../components/ViewMenu";
@@ -192,25 +191,7 @@ const XactLayout = () => {
                   );
                 }
               }}
-              onEnhance={() => {
-                if (spriteRef.current) {
-                  const filters = spriteRef.current.filters || [];
-                  if (filters.length === 0) {
-                    // 添加多个滤镜效果
-                    const colorMatrix = new PIXI.filters.ColorMatrixFilter();
-                    const blur = new PIXI.filters.BlurFilter();
-                    blur.blur = 0.5;
-
-                    spriteRef.current.filters = [colorMatrix, blur];
-
-                    // 调整颜色矩阵
-                    colorMatrix.brightness(1.2); // 增加亮度
-                    colorMatrix.contrast(1.1); // 增加对比度
-                  } else {
-                    spriteRef.current.filters = [];
-                  }
-                }
-              }}
+  
             />
             <ImageViewer onImageLoad={handleImageLoad} />
           </div>
