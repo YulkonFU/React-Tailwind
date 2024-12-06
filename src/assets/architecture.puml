@@ -1,0 +1,54 @@
+@startuml X|act System Architecture
+
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Component.puml
+
+LAYOUT_WITH_LEGEND()
+
+title X|act System Architecture
+
+Container_Boundary(frontend, "Frontend") {
+    Component(react, "React Application", "TypeScript, React 18", "前端核心应用框架")
+    Component(pixijs, "PixiJS", "JavaScript", "图像渲染引擎")
+    Component(webview, "WebView", "C++/MFC or Qt", "Web容器")
+    
+    Container_Boundary(ui_components, "UI Components") {
+        Component(layout, "XactLayout", "React", "主布局组件")
+        Component(imageviewer, "ImageViewer", "React + PixiJS", "图像查看器")
+        Component(imagecontrols, "ImageControls", "React", "图像控制面板")
+        Component(menus, "Menu System", "React", "菜单系统")
+    }
+    
+    Container_Boundary(state_management, "State Management") {
+        Component(hooks, "React Hooks", "React", "状态管理")
+        Component(refs, "React Refs", "React", "DOM引用管理")
+    }
+}
+
+Container_Boundary(backend, "Backend") {
+    Component(cpp_core, "C++ Core", "C++", "后端核心逻辑")
+    Component(image_processing, "Image Processing", "C++", "图像处理模块")
+    Component(xray_control, "X-Ray Control", "C++", "X射线控制")
+    Component(hardware_interface, "Hardware Interface", "C++", "硬件接口")
+}
+
+Container_Boundary(bridge, "Frontend-Backend Bridge") {
+    Component(ipc, "IPC Communication", "WebView", "进程间通信")
+    Component(api, "Native API", "C++", "本地API接口")
+}
+
+' 关系连接
+Rel(react, webview, "运行于")
+Rel(webview, ipc, "通信")
+Rel(ipc, api, "调用")
+Rel(api, cpp_core, "集成")
+
+Rel(layout, ui_components, "包含")
+Rel(imageviewer, pixijs, "使用")
+Rel(ui_components, hooks, "使用")
+Rel(ui_components, refs, "使用")
+
+Rel(cpp_core, image_processing, "调用")
+Rel(cpp_core, xray_control, "控制")
+Rel(cpp_core, hardware_interface, "访问")
+
+@enduml

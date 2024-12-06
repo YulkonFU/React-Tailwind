@@ -60,6 +60,7 @@ const ImageViewer = ({ onImageLoad }) => {
     />
   );
 };
+
 ImageViewer.propTypes = {
   onImageLoad: PropTypes.func,
 };

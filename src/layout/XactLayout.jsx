@@ -77,6 +77,15 @@ const XactLayout = () => {
     };
   }, []);
 
+  const handleToggleExpand = () => {
+    setIsExpanded(!isExpanded);
+    if (!isExpanded) {
+      document.documentElement.requestFullscreen();
+    } else {
+      document.exitFullscreen();
+    }
+  };
+
   return (
     <div className="flex h-screen bg-gray-100">
       {/* Left Sidebar - Tool Buttons */}
@@ -169,7 +178,7 @@ const XactLayout = () => {
           >
             <ImageControls
               isExpanded={isExpanded}
-              onToggleExpand={() => setIsExpanded(!isExpanded)}
+              onToggleExpand={handleToggleExpand}
               onRotate={(angle) => {
                 if (spriteRef.current) {
                   spriteRef.current.rotation += (angle * Math.PI) / 180;
@@ -191,7 +200,6 @@ const XactLayout = () => {
                   );
                 }
               }}
-  
             />
             <ImageViewer onImageLoad={handleImageLoad} />
           </div>

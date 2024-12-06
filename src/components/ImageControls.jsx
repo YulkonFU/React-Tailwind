@@ -18,9 +18,10 @@ const ImageControls = ({
   onReset,
 }) => {
   return (
-    <div className="absolute bottom-4 left-4 flex flex-col gap-4">
-      {/* 主控制面板 */}
-      <div className="bg-gray-800 bg-opacity-75 p-2 rounded-lg flex gap-2">
+    <div className="fixed bottom-4 left-4 z-50 flex flex-col gap-4">
+      {/* 修改为 fixed 定位并增加 z-index */}
+      <div className="bg-gray-800 bg-opacity-90 p-2 rounded-lg flex gap-2 shadow-lg">
+        {/* 增加不透明度和阴影 */}
         {/* 展开/收起按钮 */}
         <button
           className="p-2 bg-gray-700 text-white rounded hover:bg-gray-600"
@@ -32,7 +33,6 @@ const ImageControls = ({
             <Maximize2 className="w-4 h-4" />
           )}
         </button>
-
         {/* 旋转控制 */}
         <button
           className="p-2 bg-gray-700 text-white rounded hover:bg-gray-600"
@@ -46,7 +46,6 @@ const ImageControls = ({
         >
           <RotateCw className="w-4 h-4" />
         </button>
-
         {/* 缩放控制 */}
         <button
           className="p-2 bg-gray-700 text-white rounded hover:bg-gray-600"
@@ -60,7 +59,6 @@ const ImageControls = ({
         >
           <ZoomOut className="w-4 h-4" />
         </button>
-
         {/* 重置按钮 */}
         <button
           className="p-2 bg-gray-700 text-white rounded hover:bg-gray-600"
@@ -72,13 +70,13 @@ const ImageControls = ({
     </div>
   );
 };
+
 ImageControls.propTypes = {
   isExpanded: PropTypes.bool.isRequired,
   onToggleExpand: PropTypes.func.isRequired,
   onRotate: PropTypes.func.isRequired,
   onZoom: PropTypes.func.isRequired,
   onReset: PropTypes.func.isRequired,
-  onEnhance: PropTypes.func.isRequired,
 };
 
 export default ImageControls;
