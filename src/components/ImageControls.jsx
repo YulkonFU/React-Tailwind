@@ -1,5 +1,6 @@
 // src/components/ImageControls.jsx
-import React, { useState } from "react";
+import { useState } from "react";
+import PropTypes from "prop-types";
 import {
   Minimize2,
   Maximize2,
@@ -7,7 +8,6 @@ import {
   RotateCw,
   ZoomIn,
   ZoomOut,
-  Move,
   Image,
   RefreshCw,
 } from "react-feather";
@@ -97,5 +97,14 @@ const ImageControls = ({
     </div>
   );
 };
+ImageControls.propTypes = {
+  isExpanded: PropTypes.bool.isRequired,
+  onToggleExpand: PropTypes.func.isRequired,
+  onRotate: PropTypes.func.isRequired,
+  onZoom: PropTypes.func.isRequired,
+  onReset: PropTypes.func.isRequired,
+  onEnhance: PropTypes.func.isRequired,
+};
 
 export default ImageControls;
+

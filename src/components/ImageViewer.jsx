@@ -1,5 +1,6 @@
-import React, { useEffect, useRef } from 'react';
-import * as PIXI from 'pixi.js';
+import { useEffect, useRef } from "react";
+import PropTypes from "prop-types";
+import * as PIXI from "pixi.js";
 
 const ImageViewer = ({ onImageLoad }) => {
   const pixiContainerRef = useRef(null);
@@ -31,7 +32,8 @@ const ImageViewer = ({ onImageLoad }) => {
           if (onImageLoad) onImageLoad(sprite);
         };
 
-        const imageUrl = 'https://pixijs.com/assets/files/sample-747abf529b135a1f549dff3ec846afbc.png';
+        const imageUrl =
+          "https://pixijs.com/assets/files/sample-747abf529b135a1f549dff3ec846afbc.png";
         await loadAndDisplayImage(imageUrl);
       }
     };
@@ -46,18 +48,20 @@ const ImageViewer = ({ onImageLoad }) => {
   }, [onImageLoad]);
 
   return (
-    <div 
+    <div
       ref={pixiContainerRef}
-      style={{ 
-        width: '100%',
-        height: '100%',
-        position: 'absolute',
+      style={{
+        width: "100%",
+        height: "100%",
+        position: "absolute",
         top: 0,
-        left: 0
+        left: 0,
       }}
     />
   );
 };
+ImageViewer.propTypes = {
+  onImageLoad: PropTypes.func,
+};
 
 export default ImageViewer;
-

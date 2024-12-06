@@ -1,12 +1,10 @@
-import React, { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   Image as ImageIcon,
   Save,
   Grid,
   Filter,
   MessageSquare,
-  Maximize2,
-  Minimize2,
 } from "lucide-react";
 import * as PIXI from "pixi.js";
 import FileMenu from "../components/FileMenu";
@@ -23,10 +21,8 @@ const XactLayout = () => {
   const [xrayOn, setXrayOn] = useState(false); // 定义 xrayOn 状态变量
   const [isExpanded, setIsExpanded] = useState(false); // 定义 isExpanded 状态变量
   const menuRef = useRef(null);
-  const pixiContainerRef = useRef(null);
   const pixiAppRef = useRef(null);
   const spriteRef = useRef(null);
-  const [imageSize, setImageSize] = useState({ width: 384, height: 384 });
 
   const toggleMenu = (menu) => {
     setActiveMenu(activeMenu === menu ? null : menu);
