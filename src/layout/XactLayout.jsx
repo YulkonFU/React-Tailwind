@@ -17,32 +17,36 @@ import ImageControls from "../components/ImageControls";
 
 const XactLayout = () => {
   const [activeMenu, setActiveMenu] = useState(null);
-  const [xrayOn, setXrayOn] = useState(false); // 定义 xrayOn 状态变量
-  const [isExpanded, setIsExpanded] = useState(false); // 定义 isExpanded 状态变量
+  const [xrayOn, setXrayOn] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(false);
   const menuRef = useRef(null);
-  const pixiAppRef = useRef(null);
   const spriteRef = useRef(null);
 
+  // 切换菜单
   const toggleMenu = (menu) => {
     setActiveMenu(activeMenu === menu ? null : menu);
   };
 
+  // 处理点击外部关闭菜单
   const handleClickOutside = (event) => {
     if (menuRef.current && !menuRef.current.contains(event.target)) {
       setActiveMenu(null);
     }
   };
 
+  // 添加点击外部关闭菜单的事件监听
+  useEffect(() => {
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
+
   // 处理图像加载完成后的逻辑
   const handleImageLoad = (sprite) => {
     spriteRef.current = sprite;
-
-    // 设置初始属性
-    sprite.anchor.set(0.5); // 设置旋转中心点
-    sprite.interactive = true; // 启用交互
-    sprite.buttonMode = true; // 显示手型光标
-
-    // 添加拖拽功能
+    
+    // 设置拖拽功能
     let isDragging = false;
     let dragStart = { x: 0, y: 0 };
 
@@ -70,19 +74,19 @@ const XactLayout = () => {
     });
   };
 
-  useEffect(() => {
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
-  }, []);
-
-  const handleToggleExpand = () => {
-    setIsExpanded(!isExpanded);
-    if (!isExpanded) {
-      document.documentElement.requestFullscreen();
-    } else {
-      document.exitFullscreen();
+  // 处理全屏切换
+  const handleToggleExpand = async () => {
+    try {
+      if (!isExpanded) {
+        await document.documentElement.requestFullscreen();
+      } else {
+        if (document.fullscreenElement) {
+          await document.exitFullscreen();
+        }
+      }
+      setIsExpanded(!isExpanded);
+    } catch (error) {
+      console.error('Error toggling fullscreen:', error);
     }
   };
 
@@ -90,19 +94,19 @@ const XactLayout = () => {
     <div className="flex h-screen bg-gray-100">
       {/* Left Sidebar - Tool Buttons */}
       <div className="w-16 bg-gray-800 p-2 flex flex-col gap-4">
-        <button className="p-2 text-black hover:bg-gray-700 rounded">
+        <button className="p-2 text-white hover:bg-gray-700 rounded">
           <ImageIcon className="w-6 h-6" />
         </button>
-        <button className="p-2 text-black hover:bg-gray-700 rounded">
+        <button className="p-2 text-white hover:bg-gray-700 rounded">
           <Save className="w-6 h-6" />
         </button>
-        <button className="p-2 text-black hover:bg-gray-700 rounded">
+        <button className="p-2 text-white hover:bg-gray-700 rounded">
           <Grid className="w-6 h-6" />
         </button>
-        <button className="p-2 text-black hover:bg-gray-700 rounded">
+        <button className="p-2 text-white hover:bg-gray-700 rounded">
           <Filter className="w-6 h-6" />
         </button>
-        <button className="p-2 text-black hover:bg-gray-700 rounded">
+        <button className="p-2 text-white hover:bg-gray-700 rounded">
           <MessageSquare className="w-6 h-6" />
         </button>
       </div>
@@ -151,6 +155,7 @@ const XactLayout = () => {
             Help
           </button>
 
+          {/* 下拉菜单 */}
           {activeMenu === "file" && <FileMenu />}
           {activeMenu === "edit" && <EditMenu />}
           {activeMenu === "view" && <ViewMenu />}
@@ -176,6 +181,10 @@ const XactLayout = () => {
               position: "relative",
             }}
           >
+            <ImageViewer 
+              key={isExpanded ? "expanded" : "normal"} 
+              onImageLoad={handleImageLoad} 
+            />
             <ImageControls
               isExpanded={isExpanded}
               onToggleExpand={handleToggleExpand}
@@ -194,14 +203,16 @@ const XactLayout = () => {
                 if (spriteRef.current) {
                   spriteRef.current.rotation = 0;
                   spriteRef.current.scale.set(1);
-                  spriteRef.current.position.set(
-                    pixiAppRef.current.screen.width / 2,
-                    pixiAppRef.current.screen.height / 2
-                  );
+                  const parent = spriteRef.current.parent;
+                  if (parent) {
+                    spriteRef.current.position.set(
+                      parent.screen.width / 2,
+                      parent.screen.height / 2
+                    );
+                  }
                 }
               }}
             />
-            <ImageViewer onImageLoad={handleImageLoad} />
           </div>
 
           {/* Right Control Panel */}
