@@ -13,6 +13,17 @@ const ImageViewer = forwardRef(function ImageViewer({ onImageLoad }, ref) {
   const pixiAppRef = useRef(null);
   const spriteRef = useRef(null);
 
+  const calculateFitScale = (
+    imageWidth,
+    imageHeight,
+    containerWidth,
+    containerHeight
+  ) => {
+    const scaleX = containerWidth / imageWidth;
+    const scaleY = containerHeight / imageHeight;
+    return Math.min(scaleX, scaleY) * 0.9; // 乘以 0.9 留出一些边距
+  };
+
   // 加载图像方法
   const loadImage = useCallback(
     async (imageUrl) => {
@@ -34,13 +45,23 @@ const ImageViewer = forwardRef(function ImageViewer({ onImageLoad }, ref) {
           // 创建 sprite
           const sprite = new PIXI.Sprite(texture);
 
+          // 计算适合容器的初始缩放比例
+          const initialScale = calculateFitScale(
+            texture.width,
+            texture.height,
+            pixiAppRef.current.screen.width,
+            pixiAppRef.current.screen.height
+          );
+
           // 设置 sprite 属性
-          sprite.width = 384;
-          sprite.height = 384;
+          sprite.scale.set(initialScale);
           sprite.x = pixiAppRef.current.screen.width / 2;
           sprite.y = pixiAppRef.current.screen.height / 2;
           sprite.anchor.set(0.5);
           sprite.eventMode = "static";
+
+          // 保存初始缩放比例
+          sprite.initialScale = initialScale;
 
           pixiAppRef.current.stage.addChild(sprite);
           spriteRef.current = sprite;

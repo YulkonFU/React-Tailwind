@@ -236,10 +236,14 @@ const XactLayout = () => {
               }}
               onReset={() => {
                 if (spriteRef.current) {
+                  // 重置旋转
                   spriteRef.current.rotation = 0;
-                  spriteRef.current.scale.set(1);
 
-                  // 使用 pixiAppRef 获取应用实例的尺寸
+                  // 重置缩放到初始计算的比例
+                  const initialScale = spriteRef.current.initialScale || 1;
+                  spriteRef.current.scale.set(initialScale);
+
+                  // 重置位置到容器中心
                   if (imageViewerRef.current?.pixiAppRef.current) {
                     const app = imageViewerRef.current.pixiAppRef.current;
                     spriteRef.current.position.set(
