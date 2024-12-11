@@ -1,87 +1,129 @@
-// ImageViewer.jsx
-import { useEffect, useRef } from "react";
+import {
+  useEffect,
+  useRef,
+  forwardRef,
+  useImperativeHandle,
+  useCallback,
+} from "react";
 import PropTypes from "prop-types";
 import * as PIXI from "pixi.js";
 
-const ImageViewer = ({ onImageLoad }) => {
+const ImageViewer = forwardRef(function ImageViewer({ onImageLoad }, ref) {
   const pixiContainerRef = useRef(null);
   const pixiAppRef = useRef(null);
+  const spriteRef = useRef(null);
+
+  // 加载图像方法
+  const loadImage = useCallback(
+    async (imageUrl) => {
+      if (pixiAppRef.current) {
+        try {
+          // 清理现有的 sprite
+          pixiAppRef.current.stage.removeChildren();
+
+          // 如果是 Blob URL，先获取图片数据
+          const response = await fetch(imageUrl);
+          const blob = await response.blob();
+
+          // 使用 createImageBitmap 创建位图
+          const imageBitmap = await createImageBitmap(blob);
+
+          // 从位图创建 Texture
+          const texture = PIXI.Texture.from(imageBitmap);
+
+          // 创建 sprite
+          const sprite = new PIXI.Sprite(texture);
+
+          // 设置 sprite 属性
+          sprite.width = 384;
+          sprite.height = 384;
+          sprite.x = pixiAppRef.current.screen.width / 2;
+          sprite.y = pixiAppRef.current.screen.height / 2;
+          sprite.anchor.set(0.5);
+          sprite.eventMode = "static";
+
+          pixiAppRef.current.stage.addChild(sprite);
+          spriteRef.current = sprite;
+
+          if (onImageLoad) {
+            onImageLoad(sprite);
+          }
+
+          // 清理 Blob URL
+          URL.revokeObjectURL(imageUrl);
+        } catch (error) {
+          console.error("Error loading image:", error);
+        }
+      }
+    },
+    [onImageLoad]
+  );
 
   useEffect(() => {
     const initPixiApp = async () => {
-      // 清理已存在的应用
       if (pixiAppRef.current) {
         pixiAppRef.current.destroy(true);
         pixiAppRef.current = null;
       }
 
       if (pixiContainerRef.current) {
-        // 清理已存在的 canvas 元素
         while (pixiContainerRef.current.firstChild) {
-          pixiContainerRef.current.removeChild(pixiContainerRef.current.firstChild);
+          pixiContainerRef.current.removeChild(
+            pixiContainerRef.current.firstChild
+          );
         }
 
-        // 创建新的 PixiJS 应用，添加关键配置
         const app = new PIXI.Application();
+
         await app.init({
           width: pixiContainerRef.current.clientWidth,
           height: pixiContainerRef.current.clientHeight,
           backgroundColor: 0x000000,
           antialias: true,
-          clearBeforeRender: true, // 确保在渲染前清除
+          clearBeforeRender: true,
           powerPreference: "high-performance",
-          hello: true // 禁用 PixiJS 启动消息
+          hello: true,
+          resizeTo: pixiContainerRef.current,
         });
 
-        // 确保只添加一个 canvas
-        if (pixiContainerRef.current.children.length === 0) {
-          pixiContainerRef.current.appendChild(app.canvas);
-        }
-        
         pixiAppRef.current = app;
-
-        const loadAndDisplayImage = async (imageUrl) => {
-          try {
-            // 清理现有的 sprite（如果存在）
-            app.stage.removeChildren();
-            
-            // 加载并创建新的 sprite
-            await PIXI.Assets.load(imageUrl);
-            const sprite = PIXI.Sprite.from(imageUrl);
-            
-            // 设置 sprite 属性
-            sprite.width = 384;
-            sprite.height = 384;
-            sprite.x = app.screen.width / 2;
-            sprite.y = app.screen.height / 2;
-            sprite.anchor.set(0.5);
-            sprite.interactive = true;
-            
-            app.stage.addChild(sprite);
-            
-            if (onImageLoad) {
-              onImageLoad(sprite);
-            }
-          } catch (error) {
-            console.error('Error loading image:', error);
-          }
-        };
-
-        const imageUrl = "https://pixijs.com/assets/files/sample-747abf529b135a1f549dff3ec846afbc.png";
-        await loadAndDisplayImage(imageUrl);
+        pixiContainerRef.current.appendChild(app.canvas);
       }
     };
 
-    initPixiApp().catch(console.error);
+    initPixiApp();
 
-    // 清理函数
     return () => {
       if (pixiAppRef.current) {
-        pixiAppRef.current.destroy(true, { children: true, texture: true, baseTexture: true });
+        pixiAppRef.current.destroy(true, {
+          children: true,
+          texture: true,
+          baseTexture: true,
+        });
         pixiAppRef.current = null;
       }
     };
-  }, []); // 仅在组件挂载时运行
+  }, [loadImage]);
+
+  // 保存图像方法
+  const saveImage = () => {
+    if (pixiAppRef.current) {
+      const canvas = pixiAppRef.current.canvas;
+      const dataURL = canvas.toDataURL("image/png");
+
+      // 创建一个链接，触发下载
+      const link = document.createElement("a");
+      link.href = dataURL;
+      link.download = "image.png";
+      link.click();
+    }
+  };
+
+  // 暴露方法给父组件
+  useImperativeHandle(ref, () => ({
+    loadImage,
+    saveImage,
+  }));
 
   return (
     <div
@@ -92,11 +134,11 @@ const ImageViewer = ({ onImageLoad }) => {
         position: "absolute",
         top: 0,
         left: 0,
-        overflow: "hidden" // 防止可能的滚动条
+        overflow: "hidden",
       }}
     />
   );
-};
+});
 
 ImageViewer.propTypes = {
   onImageLoad: PropTypes.func,

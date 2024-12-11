@@ -21,6 +21,31 @@ const XactLayout = () => {
   const [isExpanded, setIsExpanded] = useState(false);
   const menuRef = useRef(null);
   const spriteRef = useRef(null);
+  // 定义一个 ref，用于访问 ImageViewer 的方法
+  const imageViewerRef = useRef(null);
+
+  // 处理加载图片
+  const handleLoadImage = () => {
+    // 创建文件输入元素
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "image/*";
+    input.onchange = (event) => {
+      const file = event.target.files[0];
+      if (file && imageViewerRef.current) {
+        const url = URL.createObjectURL(file);
+        imageViewerRef.current.loadImage(url);
+      }
+    };
+    input.click();
+  };
+
+  // 处理保存图片
+  const handleSaveImage = () => {
+    if (imageViewerRef.current) {
+      imageViewerRef.current.saveImage();
+    }
+  };
 
   // 切换菜单
   const toggleMenu = (menu) => {
@@ -45,7 +70,7 @@ const XactLayout = () => {
   // 处理图像加载完成后的逻辑
   const handleImageLoad = (sprite) => {
     spriteRef.current = sprite;
-    
+
     // 设置拖拽功能
     let isDragging = false;
     let dragStart = { x: 0, y: 0 };
@@ -86,7 +111,7 @@ const XactLayout = () => {
       }
       setIsExpanded(!isExpanded);
     } catch (error) {
-      console.error('Error toggling fullscreen:', error);
+      console.error("Error toggling fullscreen:", error);
     }
   };
 
@@ -94,10 +119,18 @@ const XactLayout = () => {
     <div className="flex h-screen bg-gray-100">
       {/* Left Sidebar - Tool Buttons */}
       <div className="w-16 bg-gray-800 p-2 flex flex-col gap-4">
-        <button className="p-2 text-white hover:bg-gray-700 rounded">
+        {/* 读取图片按钮 */}
+        <button
+          className="p-2 text-white hover:bg-gray-700 rounded"
+          onClick={handleLoadImage}
+        >
           <ImageIcon className="w-6 h-6" />
         </button>
-        <button className="p-2 text-white hover:bg-gray-700 rounded">
+        {/* 保存图片按钮 */}
+        <button
+          className="p-2 text-white hover:bg-gray-700 rounded"
+          onClick={handleSaveImage}
+        >
           <Save className="w-6 h-6" />
         </button>
         <button className="p-2 text-white hover:bg-gray-700 rounded">
@@ -181,9 +214,10 @@ const XactLayout = () => {
               position: "relative",
             }}
           >
-            <ImageViewer 
-              key={isExpanded ? "expanded" : "normal"} 
-              onImageLoad={handleImageLoad} 
+            <ImageViewer
+              ref={imageViewerRef}
+              key={isExpanded ? "expanded" : "normal"}
+              onImageLoad={handleImageLoad}
             />
             <ImageControls
               isExpanded={isExpanded}
