@@ -212,6 +212,7 @@ const XactLayout = () => {
               width: "500px",
               height: "500px",
               position: "relative",
+              zIndex: 1  // 添加 z-index
             }}
           >
             <ImageViewer

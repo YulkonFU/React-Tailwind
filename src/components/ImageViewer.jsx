@@ -84,10 +84,15 @@ const ImageViewer = forwardRef(function ImageViewer({ onImageLoad }, ref) {
           powerPreference: "high-performance",
           hello: true,
           resizeTo: pixiContainerRef.current,
+          backgroundAlpha: 1, // 确保背景不透明
         });
 
         pixiAppRef.current = app;
         pixiContainerRef.current.appendChild(app.canvas);
+        app.canvas.style.position = "absolute";
+        app.canvas.style.top = "0";
+        app.canvas.style.left = "0";
+        app.canvas.style.zIndex = "2";
       }
     };
 
@@ -135,6 +140,7 @@ const ImageViewer = forwardRef(function ImageViewer({ onImageLoad }, ref) {
         top: 0,
         left: 0,
         overflow: "hidden",
+        zIndex: 2, // 确保 canvas 在最上层
       }}
     />
   );
