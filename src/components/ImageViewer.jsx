@@ -112,11 +112,29 @@ const ImageViewer = forwardRef(function ImageViewer({ onImageLoad }, ref) {
 
   // 保存图像方法
   const saveImage = () => {
-    if (pixiAppRef.current) {
-      const canvas = pixiAppRef.current.canvas;
-      const dataURL = canvas.toDataURL("image/png");
+    if (pixiAppRef.current && spriteRef.current) {
+      // 确保在保存之前进行一次渲染
+      pixiAppRef.current.render();
 
-      // 创建一个链接，触发下载
+      const canvas = pixiAppRef.current.canvas;
+
+      // 创建一个临时的画布来保存当前视图
+      const tempCanvas = document.createElement("canvas");
+      tempCanvas.width = canvas.width;
+      tempCanvas.height = canvas.height;
+
+      const ctx = tempCanvas.getContext("2d");
+
+      // 填充黑色背景
+      ctx.fillStyle = "#000000";
+      ctx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
+
+      // 将 WebGL canvas 内容绘制到 2D canvas
+      ctx.drawImage(canvas, 0, 0);
+
+      // 获取图片数据并触发下载
+      const dataURL = tempCanvas.toDataURL("image/png");
+
       const link = document.createElement("a");
       link.href = dataURL;
       link.download = "image.png";
@@ -128,6 +146,7 @@ const ImageViewer = forwardRef(function ImageViewer({ onImageLoad }, ref) {
   useImperativeHandle(ref, () => ({
     loadImage,
     saveImage,
+    pixiAppRef,
   }));
 
   return (

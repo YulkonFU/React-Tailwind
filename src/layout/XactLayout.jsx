@@ -121,25 +121,25 @@ const XactLayout = () => {
       <div className="w-16 bg-gray-800 p-2 flex flex-col gap-4">
         {/* 读取图片按钮 */}
         <button
-          className="p-2 text-white hover:bg-gray-700 rounded"
+          className="p-2 text-black hover:bg-gray-700 rounded"
           onClick={handleLoadImage}
         >
           <ImageIcon className="w-6 h-6" />
         </button>
         {/* 保存图片按钮 */}
         <button
-          className="p-2 text-white hover:bg-gray-700 rounded"
+          className="p-2 text-black hover:bg-gray-700 rounded"
           onClick={handleSaveImage}
         >
           <Save className="w-6 h-6" />
         </button>
-        <button className="p-2 text-white hover:bg-gray-700 rounded">
+        <button className="p-2 text-black hover:bg-gray-700 rounded">
           <Grid className="w-6 h-6" />
         </button>
-        <button className="p-2 text-white hover:bg-gray-700 rounded">
+        <button className="p-2 text-black hover:bg-gray-700 rounded">
           <Filter className="w-6 h-6" />
         </button>
-        <button className="p-2 text-white hover:bg-gray-700 rounded">
+        <button className="p-2 text-black hover:bg-gray-700 rounded">
           <MessageSquare className="w-6 h-6" />
         </button>
       </div>
@@ -212,7 +212,7 @@ const XactLayout = () => {
               width: "500px",
               height: "500px",
               position: "relative",
-              zIndex: 1  // 添加 z-index
+              zIndex: 1, // 添加 z-index
             }}
           >
             <ImageViewer
@@ -238,11 +238,13 @@ const XactLayout = () => {
                 if (spriteRef.current) {
                   spriteRef.current.rotation = 0;
                   spriteRef.current.scale.set(1);
-                  const parent = spriteRef.current.parent;
-                  if (parent) {
+
+                  // 使用 pixiAppRef 获取应用实例的尺寸
+                  if (imageViewerRef.current?.pixiAppRef.current) {
+                    const app = imageViewerRef.current.pixiAppRef.current;
                     spriteRef.current.position.set(
-                      parent.screen.width / 2,
-                      parent.screen.height / 2
+                      app.screen.width / 2,
+                      app.screen.height / 2
                     );
                   }
                 }
