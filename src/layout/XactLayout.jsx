@@ -1,4 +1,5 @@
-import { useState, useEffect, useRef } from "react";
+// XactLayout.jsx
+import { useState, useEffect, useRef, useContext } from "react";
 import {
   Image as ImageIcon,
   Save,
@@ -6,6 +7,7 @@ import {
   Filter,
   MessageSquare,
 } from "lucide-react";
+import { useNavigate, useLocation } from "react-router-dom"; // 导入 useNavigate 和 useLocation
 import FileMenu from "../components/FileMenu";
 import EditMenu from "../components/EditMenu";
 import ViewMenu from "../components/ViewMenu";
@@ -14,6 +16,7 @@ import SetupMenu from "../components/SetupMenu";
 import HelpMenu from "../components/HelpMenu";
 import ImageViewer from "../components/ImageViewer";
 import ImageControls from "../components/ImageControls";
+import { ImageContext } from "../components/ImageContext";
 
 const XactLayout = () => {
   const [activeMenu, setActiveMenu] = useState(null);
@@ -21,22 +24,58 @@ const XactLayout = () => {
   const [isExpanded, setIsExpanded] = useState(false);
   const menuRef = useRef(null);
   const spriteRef = useRef(null);
-  // 定义一个 ref，用于访问 ImageViewer 的方法
   const imageViewerRef = useRef(null);
+  const { selectedImageData, setSelectedImageData } = useContext(ImageContext);
+
+  const navigate = useNavigate(); // 使用 useNavigate
+  const location = useLocation(); // 使用 useLocation
+
+  // 接收从导航传递的状态
+  useEffect(() => {
+    if (location.state && location.state.selectedImageData) {
+      setSelectedImageData(location.state.selectedImageData);
+      console.log("Grid button clicked");
+      console.log("Current image URL:", location.state.selectedImageData);
+    } else {
+      console.log("Current image URL:", null);
+    }
+  }, [location.state, setSelectedImageData]);
+
+  // 接收从 Grid 页面返回的状态
+  useEffect(() => {
+    if (location.state && location.state.selectedImageUrl) {
+      imageViewerRef.current.loadImage(location.state.selectedImageUrl);
+    }
+  }, [location.state]);
+
+  // 处理 Grid 按钮点击
+  const handleGridClick = () => {
+    console.log("Grid button clicked");
+    const currentImageData = imageViewerRef.current?.getCurrentImageData();
+    if (currentImageData) {
+      navigate("/grid", {
+        state: {
+          selectedImageData: currentImageData,
+        },
+      });
+    } else {
+      navigate("/grid");
+    }
+  };
 
   // 处理加载图片
   const handleLoadImage = () => {
-    // 创建文件输入元素
     const input = document.createElement("input");
     input.type = "file";
     input.accept = "image/*";
-    input.onchange = (event) => {
-      const file = event.target.files[0];
-      if (file && imageViewerRef.current) {
-        const url = URL.createObjectURL(file);
-        imageViewerRef.current.loadImage(url);
+
+    input.onchange = async (e) => {
+      const file = e.target.files[0];
+      if (file && imageViewerRef.current?.loadImage) {
+        await imageViewerRef.current.loadImage(file);
       }
     };
+
     input.click();
   };
 
@@ -99,6 +138,18 @@ const XactLayout = () => {
     });
   };
 
+  // 添加 location effect 来处理返回时的图像加载
+  useEffect(() => {
+    if (location.state && location.state.selectedImageData) {
+      const imageUrl = location.state.selectedImageData;
+      console.log("Grid button clicked");
+      console.log("Current image URL:", imageUrl);
+      // 处理 imageUrl
+    } else {
+      console.log("Current image URL:", null);
+    }
+  }, [location.state]);
+
   // 处理全屏切换
   const handleToggleExpand = async () => {
     try {
@@ -111,13 +162,13 @@ const XactLayout = () => {
       }
       setIsExpanded(!isExpanded);
     } catch (error) {
-      console.error("Error toggling fullscreen:", error);
+      console.error("切换全屏模式时出错:", error);
     }
   };
 
   return (
     <div className="flex h-screen bg-gray-100">
-      {/* Left Sidebar - Tool Buttons */}
+      {/* 左侧边栏 - 工具按钮 */}
       <div className="w-16 bg-gray-800 p-2 flex flex-col gap-4">
         {/* 读取图片按钮 */}
         <button
@@ -133,7 +184,11 @@ const XactLayout = () => {
         >
           <Save className="w-6 h-6" />
         </button>
-        <button className="p-2 text-black hover:bg-gray-700 rounded">
+        {/* Grid 按钮 */}
+        <button
+          className="p-2 text-white hover:bg-gray-700 rounded"
+          onClick={handleGridClick}
+        >
           <Grid className="w-6 h-6" />
         </button>
         <button className="p-2 text-black hover:bg-gray-700 rounded">
@@ -144,9 +199,9 @@ const XactLayout = () => {
         </button>
       </div>
 
-      {/* Main Content Area */}
+      {/* 主内容区 */}
       <div className="flex-1 flex flex-col">
-        {/* Top Menu Bar */}
+        {/* 顶部菜单栏 */}
         <div
           className="bg-white h-12 border-b flex items-center px-4 gap-4 relative"
           ref={menuRef}
@@ -197,20 +252,20 @@ const XactLayout = () => {
           {activeMenu === "help" && <HelpMenu />}
         </div>
 
-        {/* Main Workspace */}
+        {/* 主工作区 */}
         <div
           className={`flex-1 flex flex-col lg:flex-row ${
             isExpanded ? "fixed inset-0 z-40" : ""
           }`}
         >
-          {/* Image View Area */}
+          {/* 图像查看区域 */}
           <div
             className={`flex-1 bg-black relative ${
               isExpanded ? "w-full h-full" : ""
             }`}
             style={{
-              width: "500px",
-              height: "500px",
+              width: isExpanded ? "100%" : "500px",
+              height: isExpanded ? "100%" : "500px",
               position: "relative",
               zIndex: 1, // 添加 z-index
             }}
@@ -256,10 +311,10 @@ const XactLayout = () => {
             />
           </div>
 
-          {/* Right Control Panel */}
+          {/* 右侧控制面板 */}
           {!isExpanded && (
             <div className="w-full lg:w-80 bg-white border-t lg:border-t-0 lg:border-l flex flex-col">
-              {/* X-ray Controls */}
+              {/* X-ray 控制 */}
               <div className="p-4 border-b">
                 <h3 className="text-sm font-semibold mb-4">X-ray Control</h3>
                 <div className="space-y-4">
@@ -285,7 +340,7 @@ const XactLayout = () => {
                 </div>
               </div>
 
-              {/* Navigation Controls */}
+              {/* 导航控制 */}
               <div className="p-4 border-b">
                 <h3 className="text-sm font-semibold mb-4">Navigation</h3>
                 <div className="grid grid-cols-3 gap-2">
@@ -310,7 +365,7 @@ const XactLayout = () => {
                 </div>
               </div>
 
-              {/* Image Processing */}
+              {/* 图像处理 */}
               <div className="p-4 border-b">
                 <h3 className="text-sm font-semibold mb-4">Image Processing</h3>
                 <div className="space-y-4">
@@ -326,7 +381,7 @@ const XactLayout = () => {
           )}
         </div>
 
-        {/* Bottom Status Bar */}
+        {/* 底部状态栏 */}
         {!isExpanded && (
           <div className="h-8 bg-gray-800 text-white px-4 flex items-center text-sm">
             <span>Ready</span>

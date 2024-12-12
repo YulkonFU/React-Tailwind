@@ -1,3 +1,4 @@
+// ImageViewer.jsx
 import {
   useEffect,
   useRef,
@@ -12,6 +13,7 @@ const ImageViewer = forwardRef(function ImageViewer({ onImageLoad }, ref) {
   const pixiContainerRef = useRef(null);
   const pixiAppRef = useRef(null);
   const spriteRef = useRef(null);
+  const currentImageDataRef = useRef(null);
 
   const calculateFitScale = (
     imageWidth,
@@ -21,65 +23,141 @@ const ImageViewer = forwardRef(function ImageViewer({ onImageLoad }, ref) {
   ) => {
     const scaleX = containerWidth / imageWidth;
     const scaleY = containerHeight / imageHeight;
-    return Math.min(scaleX, scaleY) * 0.9; // 乘以 0.9 留出一些边距
+    return Math.min(scaleX, scaleY) * 0.9;
   };
 
   // 加载图像方法
   const loadImage = useCallback(
-    async (imageUrl) => {
-      if (pixiAppRef.current) {
-        try {
-          // 清理现有的 sprite
-          pixiAppRef.current.stage.removeChildren();
+    async (imageFile) => {
+      if (!pixiAppRef.current) return;
 
-          // 如果是 Blob URL，先获取图片数据
-          const response = await fetch(imageUrl);
-          const blob = await response.blob();
+      try {
+        // 清理现有的 sprite
+        pixiAppRef.current.stage.removeChildren();
 
-          // 使用 createImageBitmap 创建位图
-          const imageBitmap = await createImageBitmap(blob);
-
-          // 从位图创建 Texture
-          const texture = PIXI.Texture.from(imageBitmap);
-
-          // 创建 sprite
-          const sprite = new PIXI.Sprite(texture);
-
-          // 计算适合容器的初始缩放比例
-          const initialScale = calculateFitScale(
-            texture.width,
-            texture.height,
-            pixiAppRef.current.screen.width,
-            pixiAppRef.current.screen.height
-          );
-
-          // 设置 sprite 属性
-          sprite.scale.set(initialScale);
-          sprite.x = pixiAppRef.current.screen.width / 2;
-          sprite.y = pixiAppRef.current.screen.height / 2;
-          sprite.anchor.set(0.5);
-          sprite.eventMode = "static";
-
-          // 保存初始缩放比例
-          sprite.initialScale = initialScale;
-
-          pixiAppRef.current.stage.addChild(sprite);
-          spriteRef.current = sprite;
-
-          if (onImageLoad) {
-            onImageLoad(sprite);
-          }
-
-          // 清理 Blob URL
-          URL.revokeObjectURL(imageUrl);
-        } catch (error) {
-          console.error("Error loading image:", error);
+        // 创建图片 URL
+        let imageUrl;
+        if (imageFile instanceof File) {
+          imageUrl = URL.createObjectURL(imageFile);
+        } else if (imageFile instanceof Blob) {
+          imageUrl = URL.createObjectURL(imageFile);
+        } else if (typeof imageFile === "string") {
+          imageUrl = imageFile;
+        } else {
+          console.error("Invalid image input");
+          return;
         }
+
+        // 加载图片
+        const image = new Image();
+        await new Promise((resolve, reject) => {
+          image.onload = resolve;
+          image.onerror = reject;
+          image.src = imageUrl;
+        });
+
+        // 创建纹理和精灵
+        const texture = PIXI.Texture.from(image);
+        const sprite = new PIXI.Sprite(texture);
+
+        // 等待纹理加载完成
+        if (!texture.valid) {
+          await new Promise((resolve) => texture.once("update", resolve));
+        }
+
+        // 计算初始缩放
+        const initialScale = calculateFitScale(
+          texture.width,
+          texture.height,
+          pixiAppRef.current.screen.width,
+          pixiAppRef.current.screen.height
+        );
+
+        sprite.scale.set(initialScale);
+        sprite.x = pixiAppRef.current.screen.width / 2;
+        sprite.y = pixiAppRef.current.screen.height / 2;
+        sprite.anchor.set(0.5);
+        sprite.eventMode = "static";
+        sprite.initialScale = initialScale;
+
+        pixiAppRef.current.stage.addChild(sprite);
+        spriteRef.current = sprite;
+
+        // 强制渲染
+        pixiAppRef.current.render();
+
+        if (onImageLoad) {
+          onImageLoad(sprite);
+        }
+
+        // 清理 URL
+        if (imageUrl.startsWith("blob:")) {
+          URL.revokeObjectURL(imageUrl);
+        }
+
+        // 保存当前图片数据
+        currentImageDataRef.current = imageFile;
+      } catch (error) {
+        console.error("Error loading image:", error);
       }
     },
-    [onImageLoad]
+    [onImageLoad, calculateFitScale]
   );
+  
+  // 添加保存图像方法
+  const saveImage = useCallback(() => {
+    if (!pixiAppRef.current || !pixiAppRef.current.canvas) {
+      console.error("No canvas available to save");
+      return;
+    }
 
+    try {
+      // 创建一个临时 canvas 来保存当前视图
+      const canvas = document.createElement("canvas");
+      canvas.width = pixiAppRef.current.canvas.width;
+      canvas.height = pixiAppRef.current.canvas.height;
+      const ctx = canvas.getContext("2d");
+
+      // 设置黑色背景
+      ctx.fillStyle = "#000000";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // 将 WebGL canvas 内容绘制到 2D canvas
+      ctx.drawImage(pixiAppRef.current.canvas, 0, 0);
+
+      // 创建下载链接
+      const link = document.createElement("a");
+      canvas.toBlob((blob) => {
+        const url = URL.createObjectURL(blob);
+        link.href = url;
+        link.download = "image.png";
+        link.click();
+
+        // 清理
+        setTimeout(() => {
+          URL.revokeObjectURL(url);
+          canvas.remove();
+        }, 100);
+      }, "image/png");
+    } catch (error) {
+      console.error("Error saving image:", error);
+    }
+  }, []);
+
+  // 更新 useImperativeHandle，添加 saveImage 方法
+  useImperativeHandle(ref, () => ({
+    loadImage,
+    getCurrentImageData,
+    saveImage, // 添加保存方法
+    pixiAppRef,
+  }));
+
+  // 获取当前图片数据
+  const getCurrentImageData = useCallback(() => {
+    return currentImageDataRef.current;
+  }, []);
+
+  // 初始化 PIXI 应用
   useEffect(() => {
     const initPixiApp = async () => {
       if (pixiAppRef.current) {
@@ -95,7 +173,6 @@ const ImageViewer = forwardRef(function ImageViewer({ onImageLoad }, ref) {
         }
 
         const app = new PIXI.Application();
-
         await app.init({
           width: pixiContainerRef.current.clientWidth,
           height: pixiContainerRef.current.clientHeight,
@@ -104,16 +181,10 @@ const ImageViewer = forwardRef(function ImageViewer({ onImageLoad }, ref) {
           clearBeforeRender: true,
           powerPreference: "high-performance",
           hello: true,
-          resizeTo: pixiContainerRef.current,
-          backgroundAlpha: 1, // 确保背景不透明
         });
 
-        pixiAppRef.current = app;
         pixiContainerRef.current.appendChild(app.canvas);
-        app.canvas.style.position = "absolute";
-        app.canvas.style.top = "0";
-        app.canvas.style.left = "0";
-        app.canvas.style.zIndex = "2";
+        pixiAppRef.current = app;
       }
     };
 
@@ -129,46 +200,7 @@ const ImageViewer = forwardRef(function ImageViewer({ onImageLoad }, ref) {
         pixiAppRef.current = null;
       }
     };
-  }, [loadImage]);
-
-  // 保存图像方法
-  const saveImage = () => {
-    if (pixiAppRef.current && spriteRef.current) {
-      // 确保在保存之前进行一次渲染
-      pixiAppRef.current.render();
-
-      const canvas = pixiAppRef.current.canvas;
-
-      // 创建一个临时的画布来保存当前视图
-      const tempCanvas = document.createElement("canvas");
-      tempCanvas.width = canvas.width;
-      tempCanvas.height = canvas.height;
-
-      const ctx = tempCanvas.getContext("2d");
-
-      // 填充黑色背景
-      ctx.fillStyle = "#000000";
-      ctx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
-
-      // 将 WebGL canvas 内容绘制到 2D canvas
-      ctx.drawImage(canvas, 0, 0);
-
-      // 获取图片数据并触发下载
-      const dataURL = tempCanvas.toDataURL("image/png");
-
-      const link = document.createElement("a");
-      link.href = dataURL;
-      link.download = "image.png";
-      link.click();
-    }
-  };
-
-  // 暴露方法给父组件
-  useImperativeHandle(ref, () => ({
-    loadImage,
-    saveImage,
-    pixiAppRef,
-  }));
+  }, []);
 
   return (
     <div
@@ -180,7 +212,6 @@ const ImageViewer = forwardRef(function ImageViewer({ onImageLoad }, ref) {
         top: 0,
         left: 0,
         overflow: "hidden",
-        zIndex: 2, // 确保 canvas 在最上层
       }}
     />
   );
