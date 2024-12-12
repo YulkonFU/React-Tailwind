@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useNavigate } from "react";
 import {
   Image as ImageIcon,
   Save,
@@ -23,6 +23,23 @@ const XactLayout = () => {
   const spriteRef = useRef(null);
   // 定义一个 ref，用于访问 ImageViewer 的方法
   const imageViewerRef = useRef(null);
+  const navigate = useNavigate();
+
+  // 添加Grid按钮点击处理
+  const handleGridClick = () => {
+    if (imageViewerRef.current) {
+      const currentSprite = spriteRef.current;
+      if (currentSprite?.texture) {
+        // 保存当前图像数据
+        navigate("/grid", {
+          state: {
+            selectedImageData:
+              currentSprite.texture.baseTexture.resource.source,
+          },
+        });
+      }
+    }
+  };
 
   // 处理加载图片
   const handleLoadImage = () => {
