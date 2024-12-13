@@ -15,6 +15,7 @@ import HelpMenu from "../components/HelpMenu";
 import ImageViewer from "../components/ImageViewer";
 import ImageControls from "../components/ImageControls";
 import XrayControl from "../components/XrayControl";
+import ManipulatorControl from "../components/ManipulatorControl";
 
 const XactLayout = () => {
   const [activeMenu, setActiveMenu] = useState(null);
@@ -118,14 +119,12 @@ const XactLayout = () => {
     <div className="flex h-screen bg-gray-100">
       {/* Left Sidebar - Tool Buttons */}
       <div className="w-16 bg-gray-800 p-2 flex flex-col gap-4">
-        {/* 读取图片按钮 */}
         <button
           className="p-2 text-black hover:bg-gray-700 rounded"
           onClick={handleLoadImage}
         >
           <ImageIcon className="w-6 h-6" />
         </button>
-        {/* 保存图片按钮 */}
         <button
           className="p-2 text-black hover:bg-gray-700 rounded"
           onClick={handleSaveImage}
@@ -211,7 +210,7 @@ const XactLayout = () => {
               width: "500px",
               height: "500px",
               position: "relative",
-              zIndex: 1, // 添加 z-index
+              zIndex: 1,
             }}
           >
             <ImageViewer
@@ -235,14 +234,9 @@ const XactLayout = () => {
               }}
               onReset={() => {
                 if (spriteRef.current) {
-                  // 重置旋转
                   spriteRef.current.rotation = 0;
-
-                  // 重置缩放到初始计算的比例
                   const initialScale = spriteRef.current.initialScale || 1;
                   spriteRef.current.scale.set(initialScale);
-
-                  // 重置位置到容器中心
                   if (imageViewerRef.current?.pixiAppRef.current) {
                     const app = imageViewerRef.current.pixiAppRef.current;
                     spriteRef.current.position.set(
@@ -258,33 +252,11 @@ const XactLayout = () => {
           {/* Right Control Panel */}
           {!isExpanded && (
             <div className="w-full lg:w-80 bg-white border-t lg:border-t-0 lg:border-l flex flex-col">
-              {/* X-ray Controls - 替换为新组件 */}
+              {/* X-ray Controls */}
               <XrayControl />
 
-              {/* Navigation Controls */}
-              <div className="p-4 border-b">
-                <h3 className="text-sm font-semibold mb-4">Navigation</h3>
-                <div className="grid grid-cols-3 gap-2">
-                  <button className="p-2 border rounded hover:bg-gray-50">
-                    X+
-                  </button>
-                  <button className="p-2 border rounded hover:bg-gray-50">
-                    Y+
-                  </button>
-                  <button className="p-2 border rounded hover:bg-gray-50">
-                    Z+
-                  </button>
-                  <button className="p-2 border rounded hover:bg-gray-50">
-                    X-
-                  </button>
-                  <button className="p-2 border rounded hover:bg-gray-50">
-                    Y-
-                  </button>
-                  <button className="p-2 border rounded hover:bg-gray-50">
-                    Z-
-                  </button>
-                </div>
-              </div>
+              {/* Manipulator Controls */}
+              <ManipulatorControl />
 
               {/* Image Processing */}
               <div className="p-4 border-b">
