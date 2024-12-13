@@ -16,6 +16,7 @@ const XrayControl = () => {
   const [warningMessage, setWarningMessage] = useState("");
   const [showWarmupDialog, setShowWarmupDialog] = useState(false);
 
+  // 处理连接和断开连接逻辑
   const handleConnect = () => {
     if (xrayState.connected) {
       // 检查 X-ray 是否开启
@@ -40,6 +41,7 @@ const XrayControl = () => {
     }
   };
 
+  // 处理开关机逻辑
   const handlePowerToggle = () => {
     if (!xrayState.connected) {
       setWarningMessage("X-ray not connected. Please check connection.");
@@ -64,6 +66,7 @@ const XrayControl = () => {
     }
   };
 
+  // 处理warmup逻辑
   const handleWarmupConfirm = () => {
     setShowWarmupDialog(false);
     // Start warmup process
@@ -76,6 +79,7 @@ const XrayControl = () => {
     }, 2000);
   };
 
+  // 处理取消warmup逻辑
   const handleWarmupCancel = () => {
     setShowWarmupDialog(false);
     // Reset to OFF state
@@ -86,7 +90,7 @@ const XrayControl = () => {
     }));
   };
 
-  // 添加新的处理函数
+  // 调整电压和电流值
   const adjustValue = (type, amount) => {
     setXrayState((prev) => {
       let newValue;
