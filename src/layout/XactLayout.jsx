@@ -14,14 +14,13 @@ import SetupMenu from "../components/SetupMenu";
 import HelpMenu from "../components/HelpMenu";
 import ImageViewer from "../components/ImageViewer";
 import ImageControls from "../components/ImageControls";
+import XrayControl from "../components/XrayControl";
 
 const XactLayout = () => {
   const [activeMenu, setActiveMenu] = useState(null);
-  const [xrayOn, setXrayOn] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
   const menuRef = useRef(null);
   const spriteRef = useRef(null);
-  // 定义一个 ref，用于访问 ImageViewer 的方法
   const imageViewerRef = useRef(null);
 
   // 处理加载图片
@@ -259,31 +258,8 @@ const XactLayout = () => {
           {/* Right Control Panel */}
           {!isExpanded && (
             <div className="w-full lg:w-80 bg-white border-t lg:border-t-0 lg:border-l flex flex-col">
-              {/* X-ray Controls */}
-              <div className="p-4 border-b">
-                <h3 className="text-sm font-semibold mb-4">X-ray Control</h3>
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm">X-ray Power</span>
-                    <button
-                      className={`px-4 py-2 rounded ${
-                        xrayOn ? "bg-red-600" : "bg-gray-200"
-                      } text-white`}
-                      onClick={() => setXrayOn(!xrayOn)}
-                    >
-                      {xrayOn ? "ON" : "OFF"}
-                    </button>
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-sm">kV</label>
-                    <input type="range" className="w-full" />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-sm">µA</label>
-                    <input type="range" className="w-full" />
-                  </div>
-                </div>
-              </div>
+              {/* X-ray Controls - 替换为新组件 */}
+              <XrayControl />
 
               {/* Navigation Controls */}
               <div className="p-4 border-b">
