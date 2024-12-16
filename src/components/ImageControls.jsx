@@ -1,4 +1,3 @@
-// src/components/ImageControls.jsx
 import PropTypes from "prop-types";
 import {
   Minimize2,

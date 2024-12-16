@@ -14,35 +14,65 @@ import SetupMenu from "../components/SetupMenu";
 import HelpMenu from "../components/HelpMenu";
 import ImageViewer from "../components/ImageViewer";
 import ImageControls from "../components/ImageControls";
+import XrayControl from "../components/XrayControl";
+import ManipulatorControl from "../components/ManipulatorControl";
+import ImageProcessingControl from "../components/ImageProcessingControl";
 
 const XactLayout = () => {
   const [activeMenu, setActiveMenu] = useState(null);
-  const [xrayOn, setXrayOn] = useState(false); // 定义 xrayOn 状态变量
-  const [isExpanded, setIsExpanded] = useState(false); // 定义 isExpanded 状态变量
+  const [isExpanded, setIsExpanded] = useState(false);
   const menuRef = useRef(null);
-  const pixiAppRef = useRef(null);
   const spriteRef = useRef(null);
+  const imageViewerRef = useRef(null);
 
+  // 处理加载图片
+  const handleLoadImage = () => {
+    // 创建文件输入元素
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "image/*";
+    input.onchange = (event) => {
+      const file = event.target.files[0];
+      if (file && imageViewerRef.current) {
+        const url = URL.createObjectURL(file);
+        imageViewerRef.current.loadImage(url);
+      }
+    };
+    input.click();
+  };
+
+  // 处理保存图片
+  const handleSaveImage = () => {
+    if (imageViewerRef.current) {
+      imageViewerRef.current.saveImage();
+    }
+  };
+
+  // 切换菜单
   const toggleMenu = (menu) => {
     setActiveMenu(activeMenu === menu ? null : menu);
   };
 
+  // 处理点击外部关闭菜单
   const handleClickOutside = (event) => {
     if (menuRef.current && !menuRef.current.contains(event.target)) {
       setActiveMenu(null);
     }
   };
 
+  // 添加点击外部关闭菜单的事件监听
+  useEffect(() => {
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
+
   // 处理图像加载完成后的逻辑
   const handleImageLoad = (sprite) => {
     spriteRef.current = sprite;
 
-    // 设置初始属性
-    sprite.anchor.set(0.5); // 设置旋转中心点
-    sprite.interactive = true; // 启用交互
-    sprite.buttonMode = true; // 显示手型光标
-
-    // 添加拖拽功能
+    // 设置拖拽功能
     let isDragging = false;
     let dragStart = { x: 0, y: 0 };
 
@@ -70,19 +100,19 @@ const XactLayout = () => {
     });
   };
 
-  useEffect(() => {
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
-  }, []);
-
-  const handleToggleExpand = () => {
-    setIsExpanded(!isExpanded);
-    if (!isExpanded) {
-      document.documentElement.requestFullscreen();
-    } else {
-      document.exitFullscreen();
+  // 处理全屏切换
+  const handleToggleExpand = async () => {
+    try {
+      if (!isExpanded) {
+        await document.documentElement.requestFullscreen();
+      } else {
+        if (document.fullscreenElement) {
+          await document.exitFullscreen();
+        }
+      }
+      setIsExpanded(!isExpanded);
+    } catch (error) {
+      console.error("Error toggling fullscreen:", error);
     }
   };
 
@@ -90,10 +120,16 @@ const XactLayout = () => {
     <div className="flex h-screen bg-gray-100">
       {/* Left Sidebar - Tool Buttons */}
       <div className="w-16 bg-gray-800 p-2 flex flex-col gap-4">
-        <button className="p-2 text-black hover:bg-gray-700 rounded">
+        <button
+          className="p-2 text-black hover:bg-gray-700 rounded"
+          onClick={handleLoadImage}
+        >
           <ImageIcon className="w-6 h-6" />
         </button>
-        <button className="p-2 text-black hover:bg-gray-700 rounded">
+        <button
+          className="p-2 text-black hover:bg-gray-700 rounded"
+          onClick={handleSaveImage}
+        >
           <Save className="w-6 h-6" />
         </button>
         <button className="p-2 text-black hover:bg-gray-700 rounded">
@@ -151,6 +187,7 @@ const XactLayout = () => {
             Help
           </button>
 
+          {/* 下拉菜单 */}
           {activeMenu === "file" && <FileMenu />}
           {activeMenu === "edit" && <EditMenu />}
           {activeMenu === "view" && <ViewMenu />}
@@ -174,8 +211,14 @@ const XactLayout = () => {
               width: "500px",
               height: "500px",
               position: "relative",
+              zIndex: 1,
             }}
           >
+            <ImageViewer
+              ref={imageViewerRef}
+              key={isExpanded ? "expanded" : "normal"}
+              onImageLoad={handleImageLoad}
+            />
             <ImageControls
               isExpanded={isExpanded}
               onToggleExpand={handleToggleExpand}
@@ -193,83 +236,31 @@ const XactLayout = () => {
               onReset={() => {
                 if (spriteRef.current) {
                   spriteRef.current.rotation = 0;
-                  spriteRef.current.scale.set(1);
-                  spriteRef.current.position.set(
-                    pixiAppRef.current.screen.width / 2,
-                    pixiAppRef.current.screen.height / 2
-                  );
+                  const initialScale = spriteRef.current.initialScale || 1;
+                  spriteRef.current.scale.set(initialScale);
+                  if (imageViewerRef.current?.pixiAppRef.current) {
+                    const app = imageViewerRef.current.pixiAppRef.current;
+                    spriteRef.current.position.set(
+                      app.screen.width / 2,
+                      app.screen.height / 2
+                    );
+                  }
                 }
               }}
             />
-            <ImageViewer onImageLoad={handleImageLoad} />
           </div>
 
           {/* Right Control Panel */}
           {!isExpanded && (
             <div className="w-full lg:w-80 bg-white border-t lg:border-t-0 lg:border-l flex flex-col">
               {/* X-ray Controls */}
-              <div className="p-4 border-b">
-                <h3 className="text-sm font-semibold mb-4">X-ray Control</h3>
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm">X-ray Power</span>
-                    <button
-                      className={`px-4 py-2 rounded ${
-                        xrayOn ? "bg-red-600" : "bg-gray-200"
-                      } text-white`}
-                      onClick={() => setXrayOn(!xrayOn)}
-                    >
-                      {xrayOn ? "ON" : "OFF"}
-                    </button>
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-sm">kV</label>
-                    <input type="range" className="w-full" />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-sm">µA</label>
-                    <input type="range" className="w-full" />
-                  </div>
-                </div>
-              </div>
+              <XrayControl />
 
-              {/* Navigation Controls */}
-              <div className="p-4 border-b">
-                <h3 className="text-sm font-semibold mb-4">Navigation</h3>
-                <div className="grid grid-cols-3 gap-2">
-                  <button className="p-2 border rounded hover:bg-gray-50">
-                    X+
-                  </button>
-                  <button className="p-2 border rounded hover:bg-gray-50">
-                    Y+
-                  </button>
-                  <button className="p-2 border rounded hover:bg-gray-50">
-                    Z+
-                  </button>
-                  <button className="p-2 border rounded hover:bg-gray-50">
-                    X-
-                  </button>
-                  <button className="p-2 border rounded hover:bg-gray-50">
-                    Y-
-                  </button>
-                  <button className="p-2 border rounded hover:bg-gray-50">
-                    Z-
-                  </button>
-                </div>
-              </div>
+              {/* Manipulator Controls */}
+              <ManipulatorControl />
 
-              {/* Image Processing */}
-              <div className="p-4 border-b">
-                <h3 className="text-sm font-semibold mb-4">Image Processing</h3>
-                <div className="space-y-4">
-                  <button className="w-full py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
-                    Capture Image
-                  </button>
-                  <button className="w-full py-2 border rounded hover:bg-gray-50">
-                    Apply Filter
-                  </button>
-                </div>
-              </div>
+              {/* Image Processing Controls */}
+              <ImageProcessingControl />
             </div>
           )}
         </div>
