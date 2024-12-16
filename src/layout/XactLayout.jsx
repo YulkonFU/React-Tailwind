@@ -16,6 +16,7 @@ import ImageViewer from "../components/ImageViewer";
 import ImageControls from "../components/ImageControls";
 import XrayControl from "../components/XrayControl";
 import ManipulatorControl from "../components/ManipulatorControl";
+import ImageProcessingControl from "../components/ImageProcessingControl";
 
 const XactLayout = () => {
   const [activeMenu, setActiveMenu] = useState(null);
@@ -258,18 +259,8 @@ const XactLayout = () => {
               {/* Manipulator Controls */}
               <ManipulatorControl />
 
-              {/* Image Processing */}
-              <div className="p-4 border-b">
-                <h3 className="text-sm font-semibold mb-4">Image Processing</h3>
-                <div className="space-y-4">
-                  <button className="w-full py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
-                    Capture Image
-                  </button>
-                  <button className="w-full py-2 border rounded hover:bg-gray-50">
-                    Apply Filter
-                  </button>
-                </div>
-              </div>
+              {/* Image Processing Controls */}
+              <ImageProcessingControl />
             </div>
           )}
         </div>
