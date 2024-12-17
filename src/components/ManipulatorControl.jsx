@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Gamepad2,
   StopCircle,
@@ -22,6 +22,8 @@ const ManipulatorControl = () => {
 
   const [showAxisPanel, setShowAxisPanel] = useState(false);
   const [tempAxisCount, setTempAxisCount] = useState("");
+  // 添加状态
+  const [moveTimeout, setMoveTimeout] = useState(null);
 
   // 设置轴数并初始化位置数据
   const handleSetAxisCount = () => {
@@ -50,22 +52,62 @@ const ManipulatorControl = () => {
   };
 
   // 移动到指定位置
+  // 修改 handleMove 函数
   const handleMove = () => {
     console.log("Moving to positions:", manipulatorState.positions);
-    // TODO: 实现实际的移动逻辑
+    setManipulatorState((prev) => ({
+      ...prev,
+      status: "CNC_MOVING",
+    }));
+
+    const timeout = setTimeout(() => {
+      setManipulatorState((prev) => ({
+        ...prev,
+        status: "CNC_REACHED",
+      }));
+      setMoveTimeout(null);
+    }, 3000);
+
+    setMoveTimeout(timeout);
   };
+
+  // 添加 handleStop 函数
+  const handleStop = () => {
+    if (moveTimeout) {
+      clearTimeout(moveTimeout);
+      setMoveTimeout(null);
+      setManipulatorState((prev) => ({
+        ...prev,
+        status: "CNC_IS_READY",
+      }));
+    }
+  };
+
+  // 添加清除定时器的副作用
+  useEffect(() => {
+    return () => {
+      if (moveTimeout) {
+        clearTimeout(moveTimeout);
+      }
+    };
+  }, [moveTimeout]);
 
   return (
     <div className="p-4 bg-gray-100 rounded-lg space-y-4">
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-sm font-semibold">Manipulator Control</h3>
+        {/* 更新状态指示器 */}
         <div className="flex items-center space-x-2">
           <span
             className={`inline-block w-2 h-2 rounded-full ${
-              manipulatorState.status === "CNC_STAND_STILL"
+              manipulatorState.status === "CNC_REACHED"
                 ? "bg-green-500"
-                : "bg-yellow-500"
+                : manipulatorState.status === "CNC_MOVING"
+                ? "bg-blue-500"
+                : manipulatorState.status === "CNC_IS_READY"
+                ? "bg-yellow-500"
+                : "bg-red-500"
             }`}
           />
           <span className="text-xs text-gray-600">
@@ -154,12 +196,24 @@ const ManipulatorControl = () => {
                 </div>
               ))}
             </div>
-            <div className="mt-4 flex justify-end">
+            <div className="mt-4 flex justify-end space-x-2">
               <button
                 onClick={handleMove}
-                className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+                disabled={moveTimeout !== null}
+                className={`px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 ${
+                  moveTimeout !== null ? "opacity-50 cursor-not-allowed" : ""
+                }`}
               >
                 Move To Position
+              </button>
+              <button
+                onClick={handleStop}
+                disabled={moveTimeout === null}
+                className={`px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 ${
+                  moveTimeout === null ? "opacity-50 cursor-not-allowed" : ""
+                }`}
+              >
+                Stop
               </button>
             </div>
           </div>
@@ -191,19 +245,6 @@ const ManipulatorControl = () => {
         >
           <Lock className="w-4 h-4" />
           <span>Reference</span>
-        </button>
-        <button
-          onClick={() => {
-            setManipulatorState((prev) => ({
-              ...prev,
-              status: "CNC_STAND_STILL",
-              isReferencing: false,
-            }));
-          }}
-          className="p-2 bg-red-500 text-white rounded flex items-center justify-center gap-2 hover:bg-red-600"
-        >
-          <StopCircle className="w-4 h-4" />
-          <span>Stop</span>
         </button>
       </div>
 
