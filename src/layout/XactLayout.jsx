@@ -252,7 +252,7 @@ const XactLayout = () => {
 
           {/* Right Control Panel */}
           {!isExpanded && (
-            <div className="w-full lg:w-80 bg-white border-t lg:border-t-0 lg:border-l flex flex-col">
+            <div className="w-full lg:w-96 bg-white border-t lg:border-t-0 lg:border-l flex flex-col">
               {/* X-ray Controls */}
               <XrayControl />
 

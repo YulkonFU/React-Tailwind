@@ -1,60 +1,58 @@
-import { useState } from 'react';
-import { Joystick, StopCircle, Lock, Radar, DoorClosed } from 'lucide-react';
+import { useState } from "react";
+import {
+  Gamepad2,
+  StopCircle,
+  Lock,
+  Radar,
+  DoorClosed,
+  ChevronDown,
+  ChevronUp,
+} from "lucide-react";
 
 const ManipulatorControl = () => {
   const [manipulatorState, setManipulatorState] = useState({
-    status: 'CNC_NOT_READY',
+    status: "CNC_NOT_READY",
     isJoyEnabled: false,
-    position: { x: 0, y: 0, z: 0 },
     isDoorOpen: false,
     isCollisionDetected: false,
-    isReferencing: false
+    isReferencing: false,
+    axisCount: 0,
+    positions: [],
   });
 
-  // 处理参考点设置
-  const handleReference = () => {
-    setManipulatorState(prev => ({
-      ...prev,
-      status: 'CNC_DRIVING_REF',
-      isReferencing: true
-    }));
-    
-    // 模拟参考点设置过程
-    setTimeout(() => {
-      setManipulatorState(prev => ({
+  const [showAxisPanel, setShowAxisPanel] = useState(false);
+  const [tempAxisCount, setTempAxisCount] = useState("");
+
+  // 设置轴数并初始化位置数据
+  const handleSetAxisCount = () => {
+    const count = parseInt(tempAxisCount);
+    if (count > 0 && count <= 12) {
+      const newPositions = Array(count)
+        .fill(0)
+        .map(() => parseFloat("0.000")); // 确保初始值为数字
+      setManipulatorState((prev) => ({
         ...prev,
-        status: 'CNC_STAND_STILL',
-        isReferencing: false
+        axisCount: count,
+        positions: newPositions,
       }));
-    }, 2000);
+      setTempAxisCount("");
+    }
   };
 
-  // 处理紧急停止
-  const handleStop = () => {
-    setManipulatorState(prev => ({
+  // 更新位置值
+  const handlePositionChange = (index, value) => {
+    const newPositions = [...manipulatorState.positions];
+    newPositions[index] = parseFloat(value) || 0;
+    setManipulatorState((prev) => ({
       ...prev,
-      status: 'CNC_STAND_STILL',
-      isReferencing: false
+      positions: newPositions,
     }));
   };
 
-  // 处理摇杆启用/禁用
-  const toggleJoystick = () => {
-    setManipulatorState(prev => ({
-      ...prev,
-      isJoyEnabled: !prev.isJoyEnabled
-    }));
-  };
-
-  // 位置调整函数
-  const adjustPosition = (axis, value) => {
-    setManipulatorState(prev => ({
-      ...prev,
-      position: {
-        ...prev.position,
-        [axis]: prev.position[axis] + value
-      }
-    }));
+  // 移动到指定位置
+  const handleMove = () => {
+    console.log("Moving to positions:", manipulatorState.positions);
+    // TODO: 实现实际的移动逻辑
   };
 
   return (
@@ -63,80 +61,145 @@ const ManipulatorControl = () => {
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-sm font-semibold">Manipulator Control</h3>
         <div className="flex items-center space-x-2">
-          <span className={`inline-block w-2 h-2 rounded-full ${
-            manipulatorState.status === 'CNC_STAND_STILL' ? 'bg-green-500' : 'bg-yellow-500'
-          }`} />
-          <span className="text-xs text-gray-600">{manipulatorState.status}</span>
+          <span
+            className={`inline-block w-2 h-2 rounded-full ${
+              manipulatorState.status === "CNC_STAND_STILL"
+                ? "bg-green-500"
+                : "bg-yellow-500"
+            }`}
+          />
+          <span className="text-xs text-gray-600">
+            {manipulatorState.status}
+          </span>
         </div>
       </div>
 
-      {/* Position Display */}
-      <div className="grid grid-cols-3 gap-2 bg-white p-3 rounded-lg">
-        <div className="space-y-1">
-          <label className="text-xs text-gray-600">X Position</label>
-          <div className="flex items-center justify-between">
-            <span className="text-sm font-medium">{manipulatorState.position.x.toFixed(3)}</span>
-            <div className="flex flex-col">
-              <button 
-                className="px-2 py-1 text-xs hover:bg-gray-100 rounded"
-                onClick={() => adjustPosition('x', 0.001)}
-              >+</button>
-              <button 
-                className="px-2 py-1 text-xs hover:bg-gray-100 rounded"
-                onClick={() => adjustPosition('x', -0.001)}
-              >-</button>
-            </div>
+      {/* Position Configuration */}
+      <div className="bg-white rounded-lg">
+        <div
+          className="p-3 flex items-center justify-between cursor-pointer"
+          onClick={() =>
+            manipulatorState.axisCount > 0 && setShowAxisPanel(!showAxisPanel)
+          }
+        >
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium">Position Control</span>
+            {manipulatorState.axisCount > 0 &&
+              (showAxisPanel ? (
+                <ChevronUp className="w-4 h-4" />
+              ) : (
+                <ChevronDown className="w-4 h-4" />
+              ))}
+          </div>
+          <div className="flex items-center gap-2">
+            {manipulatorState.axisCount === 0 ? (
+              <div className="flex gap-2">
+                <input
+                  type="number"
+                  min="1"
+                  max="12"
+                  value={tempAxisCount}
+                  onChange={(e) => setTempAxisCount(e.target.value)}
+                  className="w-20 p-1 border rounded text-sm"
+                  placeholder="1-12"
+                />
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleSetAxisCount();
+                  }}
+                  className="px-3 py-1 text-sm bg-blue-500 text-white rounded hover:bg-blue-600"
+                >
+                  Configure
+                </button>
+              </div>
+            ) : (
+              <span className="text-sm text-gray-500">
+                {manipulatorState.axisCount} axes configured
+              </span>
+            )}
           </div>
         </div>
-        <div className="space-y-1">
-          <label className="text-xs text-gray-600">Y Position</label>
-          <div className="flex items-center justify-between">
-            <span className="text-sm font-medium">{manipulatorState.position.y.toFixed(3)}</span>
-            <div className="flex flex-col">
-              <button 
-                className="px-2 py-1 text-xs hover:bg-gray-100 rounded"
-                onClick={() => adjustPosition('y', 0.001)}
-              >+</button>
-              <button 
-                className="px-2 py-1 text-xs hover:bg-gray-100 rounded"
-                onClick={() => adjustPosition('y', -0.001)}
-              >-</button>
+
+        {/* Axis Position Inputs */}
+        {showAxisPanel && manipulatorState.axisCount > 0 && (
+          <div className="p-3 border-t">
+            <div className="grid grid-cols-3 gap-4">
+              {manipulatorState.positions.map((pos, index) => (
+                <div
+                  key={index}
+                  className="flex bg-gray-100 rounded border p-0.5"
+                >
+                  <div className="flex items-center px-2 font-medium">
+                    {String.fromCharCode(65 + index)}
+                  </div>
+                  <div className="border-l border-gray-300 bg-white rounded-r flex-1">
+                    <input
+                      type="text"
+                      value={`${pos >= 0 ? "+" : ""}${pos.toFixed(3)}`}
+                      onChange={(e) => {
+                        const inputValue = e.target.value;
+                        // 允许输入负号、小数点和数字
+                        if (/^[+-]?\d*\.?\d*$/.test(inputValue)) {
+                          const numValue = parseFloat(inputValue);
+                          if (!isNaN(numValue)) {
+                            handlePositionChange(index, numValue);
+                          }
+                        }
+                      }}
+                      className="w-full px-2 py-1 focus:outline-none"
+                      style={{ fontFamily: "monospace" }}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="mt-4 flex justify-end">
+              <button
+                onClick={handleMove}
+                className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+              >
+                Move To Position
+              </button>
             </div>
           </div>
-        </div>
-        <div className="space-y-1">
-          <label className="text-xs text-gray-600">Z Position</label>
-          <div className="flex items-center justify-between">
-            <span className="text-sm font-medium">{manipulatorState.position.z.toFixed(3)}</span>
-            <div className="flex flex-col">
-              <button 
-                className="px-2 py-1 text-xs hover:bg-gray-100 rounded"
-                onClick={() => adjustPosition('z', 0.001)}
-              >+</button>
-              <button 
-                className="px-2 py-1 text-xs hover:bg-gray-100 rounded"
-                onClick={() => adjustPosition('z', -0.001)}
-              >-</button>
-            </div>
-          </div>
-        </div>
+        )}
       </div>
 
       {/* Control Buttons */}
       <div className="grid grid-cols-2 gap-2">
         <button
-          onClick={handleReference}
+          onClick={() => {
+            setManipulatorState((prev) => ({
+              ...prev,
+              isReferencing: true,
+              status: "CNC_DRIVING_REF",
+            }));
+            setTimeout(() => {
+              setManipulatorState((prev) => ({
+                ...prev,
+                isReferencing: false,
+                status: "CNC_STAND_STILL",
+              }));
+            }, 2000);
+          }}
           className={`p-2 rounded flex items-center justify-center gap-2 ${
             manipulatorState.isReferencing
-              ? 'bg-blue-500 text-white'
-              : 'bg-white hover:bg-gray-50'
+              ? "bg-blue-500 text-white"
+              : "bg-white hover:bg-gray-50"
           }`}
         >
           <Lock className="w-4 h-4" />
           <span>Reference</span>
         </button>
         <button
-          onClick={handleStop}
+          onClick={() => {
+            setManipulatorState((prev) => ({
+              ...prev,
+              status: "CNC_STAND_STILL",
+              isReferencing: false,
+            }));
+          }}
           className="p-2 bg-red-500 text-white rounded flex items-center justify-center gap-2 hover:bg-red-600"
         >
           <StopCircle className="w-4 h-4" />
@@ -148,18 +211,23 @@ const ManipulatorControl = () => {
       <div className="space-y-2">
         <div className="flex items-center justify-between p-2 bg-white rounded">
           <div className="flex items-center gap-2">
-            <Joystick className="w-4 h-4" />
+            <Gamepad2 className="w-4 h-4" />
             <span className="text-sm">Joystick Control</span>
           </div>
           <button
-            onClick={toggleJoystick}
+            onClick={() =>
+              setManipulatorState((prev) => ({
+                ...prev,
+                isJoyEnabled: !prev.isJoyEnabled,
+              }))
+            }
             className={`px-3 py-1 rounded text-sm ${
               manipulatorState.isJoyEnabled
-                ? 'bg-green-500 text-white'
-                : 'bg-gray-200 hover:bg-gray-300'
+                ? "bg-green-500 text-white"
+                : "bg-gray-200 hover:bg-gray-300"
             }`}
           >
-            {manipulatorState.isJoyEnabled ? 'Enabled' : 'Disabled'}
+            {manipulatorState.isJoyEnabled ? "Enabled" : "Disabled"}
           </button>
         </div>
 
@@ -168,26 +236,30 @@ const ManipulatorControl = () => {
             <Radar className="w-4 h-4" />
             <span className="text-sm">Collision Detection</span>
           </div>
-          <span className={`px-2 py-1 rounded text-xs ${
-            manipulatorState.isCollisionDetected
-              ? 'bg-red-100 text-red-600'
-              : 'bg-green-100 text-green-600'
-          }`}>
-            {manipulatorState.isCollisionDetected ? 'Detected' : 'Clear'}
+          <span
+            className={`px-2 py-1 rounded text-xs ${
+              manipulatorState.isCollisionDetected
+                ? "bg-red-100 text-red-600"
+                : "bg-green-100 text-green-600"
+            }`}
+          >
+            {manipulatorState.isCollisionDetected ? "Detected" : "Clear"}
           </span>
         </div>
 
         <div className="flex items-center justify-between p-2 bg-white rounded">
           <div className="flex items-center gap-2">
-            <DoorClosed  className="w-4 h-4" />
+            <DoorClosed className="w-4 h-4" />
             <span className="text-sm">Door Status</span>
           </div>
-          <span className={`px-2 py-1 rounded text-xs ${
-            manipulatorState.isDoorOpen
-              ? 'bg-red-100 text-red-600'
-              : 'bg-green-100 text-green-600'
-          }`}>
-            {manipulatorState.isDoorOpen ? 'Open' : 'Closed'}
+          <span
+            className={`px-2 py-1 rounded text-xs ${
+              manipulatorState.isDoorOpen
+                ? "bg-red-100 text-red-600"
+                : "bg-green-100 text-green-600"
+            }`}
+          >
+            {manipulatorState.isDoorOpen ? "Open" : "Closed"}
           </span>
         </div>
       </div>
