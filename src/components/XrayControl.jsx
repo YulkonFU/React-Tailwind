@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
+import PropTypes from "prop-types";
 import { Radiation, AlertTriangle, ChevronUp, ChevronDown } from "lucide-react";
 
-const XrayControl = () => {
+const XrayControl = ({ onStatusChange }) => {
   const [xrayState, setXrayState] = useState({
     isPowered: false,
     isWarmedUp: false,
@@ -19,31 +20,38 @@ const XrayControl = () => {
   const [showWarmupDialog, setShowWarmupDialog] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
 
-  // 处理开关机
+  // 处理暖机确认
+  const handleWarmupConfirm = () => {
+    setShowWarmupDialog(false);
+    setXrayState((prev) => {
+      const newState = {
+        ...prev,
+        isPowered: true,
+        isWarmedUp: true,
+        status: "XR_IS_ON",
+      };
+      onStatusChange(newState.status);
+      return newState;
+    });
+  };
+
+  // 处理开关
   const handlePowerToggle = () => {
     if (!xrayState.isPowered) {
       setShowWarmupDialog(true);
     } else {
-      setXrayState((prev) => ({
-        ...prev,
-        isPowered: false,
-        isWarmedUp: false,
-        status: "XR_IS_OFF",
-      }));
+      setXrayState((prev) => {
+        const newState = {
+          ...prev,
+          isPowered: false,
+          isWarmedUp: false,
+          status: "XR_IS_OFF",
+        };
+        onStatusChange(newState.status);
+        return newState;
+      });
     }
   };
-
-  // 处理预热确认
-  const handleWarmupConfirm = () => {
-    setShowWarmupDialog(false);
-    setXrayState((prev) => ({
-      ...prev,
-      isPowered: true,
-      isWarmedUp: true,
-      status: "XR_IS_ON",
-    }));
-  };
-
   // 处理拖动开始
   const handleDragStart = (e) => {
     setIsDragging(true);
@@ -276,6 +284,9 @@ const XrayControl = () => {
       </div>
     </>
   );
+};
+XrayControl.propTypes = {
+  onStatusChange: PropTypes.func.isRequired,
 };
 
 export default XrayControl;

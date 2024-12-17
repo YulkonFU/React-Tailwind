@@ -21,6 +21,7 @@ import ImageProcessingControl from "../components/ImageProcessingControl";
 const XactLayout = () => {
   const [activeMenu, setActiveMenu] = useState(null);
   const [isExpanded, setIsExpanded] = useState(false);
+  const [xrayStatus, setXrayStatus] = useState("XR_NOT_READY");
   const menuRef = useRef(null);
   const spriteRef = useRef(null);
   const imageViewerRef = useRef(null);
@@ -253,14 +254,17 @@ const XactLayout = () => {
           {/* Right Control Panel */}
           {!isExpanded && (
             <div className="w-full lg:w-96 bg-white border-t lg:border-t-0 lg:border-l flex flex-col">
-              {/* X-ray Controls */}
-              <XrayControl />
+              <XrayControl onStatusChange={(status) => setXrayStatus(status)} />
 
-              {/* Manipulator Controls */}
-              <ManipulatorControl />
-
-              {/* Image Processing Controls */}
-              <ImageProcessingControl />
+              {/* 根据 X-ray 状态添加禁用样式 */}
+              <div
+                className={
+                  xrayStatus !== "XR_IS_ON" && "opacity-50 pointer-events-none"
+                }
+              >
+                <ManipulatorControl />
+                <ImageProcessingControl />
+              </div>
             </div>
           )}
         </div>

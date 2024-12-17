@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
 import {
   Gamepad2,
-  StopCircle,
   Lock,
   Radar,
   DoorClosed,
