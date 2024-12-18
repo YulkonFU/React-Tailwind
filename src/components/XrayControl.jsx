@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import PropTypes from "prop-types";
 import { Radiation, AlertTriangle, ChevronUp, ChevronDown } from "lucide-react";
 
@@ -21,19 +21,22 @@ const XrayControl = ({ onStatusChange }) => {
   const [isCollapsed, setIsCollapsed] = useState(false);
 
   // 处理暖机确认
-  const handleWarmupConfirm = () => {
+  const handleWarmupConfirm = useCallback(() => {
     setShowWarmupDialog(false);
-    setXrayState((prev) => {
-      const newState = {
-        ...prev,
-        isPowered: true,
-        isWarmedUp: true,
-        status: "XR_IS_ON",
-      };
-      onStatusChange(newState.status);
-      return newState;
-    });
-  };
+    const newStatus = "XR_IS_ON";
+    setXrayState((prev) => ({
+      ...prev,
+      isPowered: true,
+      isWarmedUp: true,
+      status: newStatus,
+    }));
+    onStatusChange?.(newStatus);
+  }, [onStatusChange]);
+
+  // 使用 useEffect 处理状态变化
+  useEffect(() => {
+    onStatusChange?.(xrayState.status);
+  }, [xrayState.status, onStatusChange]);
 
   // 处理开关
   const handlePowerToggle = () => {

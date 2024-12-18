@@ -256,10 +256,12 @@ const XactLayout = () => {
             <div className="w-full lg:w-96 bg-white border-t lg:border-t-0 lg:border-l flex flex-col">
               <XrayControl onStatusChange={(status) => setXrayStatus(status)} />
 
-              {/* 根据 X-ray 状态添加禁用样式 */}
+              {/* 使用三元运算符处理条件类名 */}
               <div
                 className={
-                  xrayStatus !== "XR_IS_ON" && "opacity-50 pointer-events-none"
+                  xrayStatus !== "XR_IS_ON"
+                    ? "opacity-50 pointer-events-none"
+                    : ""
                 }
               >
                 <ManipulatorControl />
