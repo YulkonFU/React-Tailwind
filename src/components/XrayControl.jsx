@@ -102,6 +102,8 @@ const XrayControl = ({ onStatusChange }) => {
           transform: `translate(${position.x}px, ${position.y}px)`,
           transition: isDragging ? "none" : "transform 0.3s",
           width: isCollapsed ? "40px" : "320px", // 增加宽度
+          backgroundColor: "white",
+          zIndex: 1000, // 确保在其他组件之上
         }}
       >
         {/* 主控件头部 */}
