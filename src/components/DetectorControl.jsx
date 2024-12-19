@@ -1,11 +1,37 @@
-import { useState } from 'react';
-import { Play, Square, Clock, Sliders, RotateCcw, ChevronDown, BarChart2, Settings, Maximize2 } from 'lucide-react';
+import { useState, useEffect } from "react";
+import {
+  Play,
+  Square,
+  Clock,
+  Sliders,
+  RotateCcw,
+  ChevronDown,
+  BarChart2,
+  Settings,
+  Maximize2,
+} from "lucide-react";
+import { imageDataService } from "../services/ImageDataService";
 
 const IMAGE_FILTERS = [
-  'Average', 'Blur', 'Difference', 'ENR', 'Gauss', 'HighLight',
-  'HighLight_weak', 'Horizontal-edge', 'Kirsch 360°', 'Median',
-  'NDT Filter', 'New Macro', 'Prewitt', 'Relief', 'Roberts',
-  'Save As', 'Sharpen', 'Smooth', 'Sobel'
+  "Average",
+  "Blur",
+  "Difference",
+  "ENR",
+  "Gauss",
+  "HighLight",
+  "HighLight_weak",
+  "Horizontal-edge",
+  "Kirsch 360°",
+  "Median",
+  "NDT Filter",
+  "New Macro",
+  "Prewitt",
+  "Relief",
+  "Roberts",
+  "Save As",
+  "Sharpen",
+  "Smooth",
+  "Sobel",
 ];
 
 const DetectorControl = () => {
@@ -19,43 +45,87 @@ const DetectorControl = () => {
     histogram: false,
     timing: {
       exposure: 100,
-      delay: 0
-    }
+      delay: 0,
+    },
   });
 
   // 图像处理状态
-  const [selectedFilters, setSelectedFilters] = useState(['none', 'none', 'none', 'none']);
+  const [selectedFilters, setSelectedFilters] = useState([
+    "none",
+    "none",
+    "none",
+    "none",
+  ]);
   const [filterHistory, setFilterHistory] = useState([]);
 
   // Acquire Live 控制
-  const toggleLive = () => {
-    setAcquisitionState(prev => ({
-      ...prev,
-      isLive: !prev.isLive
-    }));
+  const toggleLive = async () => {
+    setAcquisitionState((prev) => {
+      const newState = { ...prev, isLive: !prev.isLive };
+
+      if (newState.isLive) {
+        // 开始实时采集
+        startLiveCapture();
+      } else {
+        // 停止实时采集
+        stopLiveCapture();
+      }
+
+      return newState;
+    });
   };
+
+  // 添加实时采集函数
+  let captureInterval = null;
+
+  const startLiveCapture = () => {
+    captureInterval = setInterval(async () => {
+      try {
+        const imageData = await imageDataService.getImageData(1024, 1024);
+        // 处理获取到的图像数据
+        // TODO: 更新显示或处理
+      } catch (error) {
+        console.error("Live capture error:", error);
+        stopLiveCapture();
+      }
+    }, 1000 / acquisitionState.fps); // 根据 FPS 设置间隔
+  };
+
+  const stopLiveCapture = () => {
+    if (captureInterval) {
+      clearInterval(captureInterval);
+      captureInterval = null;
+    }
+  };
+
+  // 在组件卸载时清理
+  useEffect(() => {
+    return () => {
+      stopLiveCapture();
+    };
+  }, []);
 
   // 积分控制
   const handleIntegrationChange = (frames) => {
-    setAcquisitionState(prev => ({
+    setAcquisitionState((prev) => ({
       ...prev,
-      integrationFrames: frames
+      integrationFrames: frames,
     }));
   };
 
   // FPS 控制
   const handleFpsChange = (value) => {
-    setAcquisitionState(prev => ({
+    setAcquisitionState((prev) => ({
       ...prev,
-      fps: value
+      fps: value,
     }));
   };
 
   // Camera Gain 控制
   const handleGainChange = (value) => {
-    setAcquisitionState(prev => ({
+    setAcquisitionState((prev) => ({
       ...prev,
-      gain: value
+      gain: value,
     }));
   };
 
@@ -74,7 +144,7 @@ const DetectorControl = () => {
       setSelectedFilters(previousState);
       setFilterHistory(filterHistory.slice(0, -1));
     } else {
-      setSelectedFilters(['none', 'none', 'none', 'none']);
+      setSelectedFilters(["none", "none", "none", "none"]);
     }
   };
 
@@ -83,7 +153,7 @@ const DetectorControl = () => {
       {/* Acquire Control Section */}
       <div className="bg-gray-100 rounded-lg p-4">
         <h3 className="text-sm font-medium mb-4">Acquisition Control</h3>
-        
+
         <div className="space-y-4">
           {/* Live/Integration Controls */}
           <div className="flex gap-4">
@@ -91,17 +161,23 @@ const DetectorControl = () => {
               onClick={toggleLive}
               className={`flex items-center gap-2 px-4 py-2 rounded ${
                 acquisitionState.isLive
-                  ? 'bg-green-500 text-white'
-                  : 'bg-gray-200 hover:bg-gray-300'
+                  ? "bg-green-500 text-white"
+                  : "bg-gray-200 hover:bg-gray-300"
               }`}
             >
-              {acquisitionState.isLive ? <Square className="w-4 h-4" /> : <Play className="w-4 h-4" />}
-              {acquisitionState.isLive ? 'Stop Live' : 'Start Live'}
+              {acquisitionState.isLive ? (
+                <Square className="w-4 h-4" />
+              ) : (
+                <Play className="w-4 h-4" />
+              )}
+              {acquisitionState.isLive ? "Stop Live" : "Start Live"}
             </button>
 
             <select
               value={acquisitionState.integrationFrames}
-              onChange={(e) => handleIntegrationChange(parseInt(e.target.value))}
+              onChange={(e) =>
+                handleIntegrationChange(parseInt(e.target.value))
+              }
               className="bg-gray-200 rounded px-3 py-2"
             >
               <option value={1}>No Integration</option>
@@ -143,7 +219,9 @@ const DetectorControl = () => {
               onChange={(e) => handleGainChange(parseFloat(e.target.value))}
               className="w-full"
             />
-            <div className="text-right text-sm">{acquisitionState.gain.toFixed(1)}x</div>
+            <div className="text-right text-sm">
+              {acquisitionState.gain.toFixed(1)}x
+            </div>
           </div>
         </div>
       </div>
@@ -155,9 +233,16 @@ const DetectorControl = () => {
         <div className="space-y-2">
           {/* Histogram Toggle */}
           <button
-            onClick={() => setAcquisitionState(prev => ({ ...prev, histogram: !prev.histogram }))}
+            onClick={() =>
+              setAcquisitionState((prev) => ({
+                ...prev,
+                histogram: !prev.histogram,
+              }))
+            }
             className={`w-full flex items-center justify-between px-3 py-2 rounded ${
-              acquisitionState.histogram ? 'bg-blue-500 text-white' : 'bg-gray-200'
+              acquisitionState.histogram
+                ? "bg-blue-500 text-white"
+                : "bg-gray-200"
             }`}
           >
             <div className="flex items-center gap-2">
@@ -178,7 +263,9 @@ const DetectorControl = () => {
                 >
                   <option value="none">&lt;none&gt;</option>
                   {IMAGE_FILTERS.map((filter) => (
-                    <option key={filter} value={filter}>{filter}</option>
+                    <option key={filter} value={filter}>
+                      {filter}
+                    </option>
                   ))}
                 </select>
                 <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700">
@@ -207,7 +294,7 @@ const DetectorControl = () => {
             <span>Multi-View</span>
             <Maximize2 className="w-4 h-4" />
           </button>
-          
+
           <button className="w-full flex items-center justify-between px-3 py-2 bg-gray-200 rounded hover:bg-gray-300">
             <span>Overlay</span>
             <Settings className="w-4 h-4" />

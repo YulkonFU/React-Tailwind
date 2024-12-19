@@ -217,8 +217,10 @@ const XactLayout = () => {
           >
             <ImageViewer
               ref={imageViewerRef}
-              key={isExpanded ? "expanded" : "normal"}
-              onImageLoad={handleImageLoad}
+              style={{
+                width: "100%",
+                height: "100%",
+              }}
             />
             <ImageControls
               isExpanded={isExpanded}
