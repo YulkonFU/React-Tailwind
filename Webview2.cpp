@@ -4,6 +4,7 @@
 #include <WebView2.h>
 #include <string>
 #include <vector>
+#include <atlenc.h>  // 添加用于 Base64 编码
 
 using namespace Microsoft::WRL;
 
@@ -11,15 +12,49 @@ HWND hWnd;
 wil::com_ptr<ICoreWebView2Controller> webViewController;
 wil::com_ptr<ICoreWebView2> webViewWindow;
 
+// 图像数据结构
+struct ImageData {
+    std::vector<BYTE> data;
+    UINT width;
+    UINT height;
+};
+
 // ImageHandler 类定义
 class ImageHandler : public Microsoft::WRL::RuntimeClass<
     Microsoft::WRL::RuntimeClassFlags<Microsoft::WRL::ClassicCom>,
     IDispatch> {
 private:
-    std::vector<BYTE> imageBuffer;
+    ImageData imageData;
+
+    void InitializeImageData() {
+        // 设置图像尺寸
+        imageData.width = 640;   // 示例尺寸
+        imageData.height = 480;  // 示例尺寸
+
+        // 初始化图像数据
+        UINT dataSize = imageData.width * imageData.height * 4;  // RGBA
+        imageData.data.resize(dataSize);
+
+        // 生成测试图像
+        for (UINT y = 0; y < imageData.height; y++) {
+            for (UINT x = 0; x < imageData.width; x++) {
+                UINT index = (y * imageData.width + x) * 4;
+                float normalizedX = (float)x / imageData.width;
+                float normalizedY = (float)y / imageData.height;
+
+                // 创建渐变图案
+                imageData.data[index] = (BYTE)(255 * normalizedX);     // R
+                imageData.data[index + 1] = (BYTE)(255 * normalizedY); // G
+                imageData.data[index + 2] = (BYTE)(255 * (1 - normalizedX)); // B
+                imageData.data[index + 3] = 255;                       // A
+            }
+        }
+    }
 
 public:
-    ImageHandler() {}
+    ImageHandler() {
+        InitializeImageData();
+    }
 
     // IDispatch 方法实现
     STDMETHOD(GetTypeInfoCount)(UINT* pctinfo) override {
@@ -42,10 +77,6 @@ public:
             rgDispId[0] = 1;
             return S_OK;
         }
-        else if (wcscmp(name, L"sendImageData") == 0) {
-            rgDispId[0] = 2;
-            return S_OK;
-        }
 
         return DISP_E_UNKNOWNNAME;
     }
@@ -54,74 +85,69 @@ public:
         WORD wFlags, DISPPARAMS* pDispParams, VARIANT* pVarResult,
         EXCEPINFO* pExcepInfo, UINT* puArgErr) override
     {
-        switch (dispIdMember) {
-        case 1: // getImageData
-            if (pDispParams->cArgs == 2) { // width, height
-                UINT width = pDispParams->rgvarg[1].ulVal;
-                UINT height = pDispParams->rgvarg[0].ulVal;
+        if (dispIdMember == 1) { // getImageData
+            if (!pVarResult) return E_POINTER;
 
-                // 生成测试图像数据（红色渐变示例）
-                UINT dataSize = width * height * 4;  // RGBA
-                imageBuffer.resize(dataSize);
-                for (UINT y = 0; y < height; y++) {
-                    for (UINT x = 0; x < width; x++) {
-                        UINT index = (y * width + x) * 4;
-                        float gradientX = (float)x / width;
-                        float gradientY = (float)y / height;
-                        imageBuffer[index] = (BYTE)(255 * gradientX);    // R
-                        imageBuffer[index + 1] = 0;                      // G
-                        imageBuffer[index + 2] = (BYTE)(255 * gradientY);// B
-                        imageBuffer[index + 3] = 255;                    // A
+            // 将图像数据编码为 Base64 字符串
+            int base64Len = Base64EncodeGetRequiredLength(imageData.data.size());
+            if (base64Len > 0) {
+                std::string base64Str(base64Len, '\0');
+                if (Base64Encode(
+                    imageData.data.data(),
+                    imageData.data.size(),
+                    &base64Str[0],
+                    &base64Len,
+                    ATL_BASE64_FLAG_NOCRLF))
+                {
+                    // 将 base64Str 转换为 BSTR
+                    int wchars_num = MultiByteToWideChar(CP_UTF8, 0, base64Str.c_str(), base64Len, NULL, 0);
+                    BSTR bstr = SysAllocStringLen(0, wchars_num);
+                    MultiByteToWideChar(CP_UTF8, 0, base64Str.c_str(), base64Len, bstr, wchars_num);
+
+                    // 创建返回对象的 SAFEARRAY
+                    SAFEARRAYBOUND bounds[1];
+                    bounds[0].lLbound = 0;
+                    bounds[0].cElements = 3;  // 三个属性：data, width, height
+                    SAFEARRAY* psa = SafeArrayCreate(VT_VARIANT, 1, bounds);
+                    if (!psa) {
+                        SysFreeString(bstr);
+                        return E_OUTOFMEMORY;
                     }
-                }
 
-                // 创建返回的数组
-                SAFEARRAY* psa = SafeArrayCreateVector(VT_UI1, 0, dataSize);
-                if (psa == NULL) return E_OUTOFMEMORY;
+                    LONG index = 0;
+                    VARIANT var;
 
-                void* pData;
-                HRESULT hr = SafeArrayAccessData(psa, &pData);
-                if (SUCCEEDED(hr)) {
-                    memcpy(pData, imageBuffer.data(), dataSize);
-                    SafeArrayUnaccessData(psa);
+                    // 设置图像数据（Base64 字符串）
+                    VariantInit(&var);
+                    var.vt = VT_BSTR;
+                    var.bstrVal = bstr;
+                    SafeArrayPutElement(psa, &index, &var);
 
-                    if (pVarResult) {
-                        pVarResult->vt = VT_ARRAY | VT_UI1;
-                        pVarResult->parray = psa;
-                    }
+                    // 设置宽度
+                    index = 1;
+                    VariantInit(&var);
+                    var.vt = VT_UI4;
+                    var.ulVal = imageData.width;
+                    SafeArrayPutElement(psa, &index, &var);
+
+                    // 设置高度
+                    index = 2;
+                    VariantInit(&var);
+                    var.vt = VT_UI4;
+                    var.ulVal = imageData.height;
+                    SafeArrayPutElement(psa, &index, &var);
+
+                    // 返回结果
+                    pVarResult->vt = VT_ARRAY | VT_VARIANT;
+                    pVarResult->parray = psa;
+
                     return S_OK;
                 }
-                else {
-                    SafeArrayDestroy(psa);
-                    return hr;
-                }
             }
-            return E_INVALIDARG;
-
-        case 2: // sendImageData
-            if (pDispParams->cArgs >= 1 &&
-                pDispParams->rgvarg[0].vt == (VT_ARRAY | VT_UI1)) {
-                SAFEARRAY* psa = pDispParams->rgvarg[0].parray;
-                LONG lbound, ubound;
-                SafeArrayGetLBound(psa, 1, &lbound);
-                SafeArrayGetUBound(psa, 1, &ubound);
-                UINT size = ubound - lbound + 1;
-
-                void* pData;
-                HRESULT hr = SafeArrayAccessData(psa, &pData);
-                if (SUCCEEDED(hr)) {
-                    imageBuffer.resize(size);
-                    memcpy(imageBuffer.data(), pData, size);
-                    SafeArrayUnaccessData(psa);
-                    return S_OK;
-                }
-                return hr;
-            }
-            return E_INVALIDARG;
-
-        default:
-            return DISP_E_MEMBERNOTFOUND;
+            return E_FAIL;
         }
+
+        return DISP_E_MEMBERNOTFOUND;
     }
 };
 
@@ -167,27 +193,13 @@ void InitializeWebView2()
                             // 注册图像处理器
                             ComPtr<IDispatch> imageHandler = Microsoft::WRL::Make<ImageHandler>();
                             VARIANT var;
+                            VariantInit(&var);
                             var.vt = VT_DISPATCH;
                             var.pdispVal = imageHandler.Get();
                             webViewWindow->AddHostObjectToScript(L"imageHandler", &var);
 
                             // 导航到本地服务器
                             webViewWindow->Navigate(L"http://localhost:5173/");
-
-                            // 注册消息处理
-                            EventRegistrationToken token;
-                            webViewWindow->add_WebMessageReceived(
-                                Callback<ICoreWebView2WebMessageReceivedEventHandler>(
-                                    [](ICoreWebView2* sender, ICoreWebView2WebMessageReceivedEventArgs* args) -> HRESULT {
-                                        wil::unique_cotaskmem_string message;
-                                        HRESULT hr = args->TryGetWebMessageAsString(&message);
-                                        if (SUCCEEDED(hr)) {
-                                            std::wstring messageW(message.get());
-                                            std::string messageA(messageW.begin(), messageW.end());
-                                            MessageBoxA(nullptr, messageA.c_str(), "Message from React", MB_OK);
-                                        }
-                                        return S_OK;
-                                    }).Get(), &token);
 
                             return S_OK;
                         }).Get());
@@ -230,5 +242,4 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR, int nCmdShow)
     }
 
     return 0;
-    
 }
