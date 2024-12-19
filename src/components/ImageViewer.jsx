@@ -1,6 +1,6 @@
-import React, { useEffect, useRef, forwardRef } from 'react';
-import * as PIXI from 'pixi.js';
-import { imageDataService } from '../services/ImageDataService';
+import React, { useEffect, useRef, forwardRef } from "react";
+import * as PIXI from "pixi.js";
+import { imageDataService } from "../services/ImageDataService";
 
 const ImageViewer = forwardRef((props, ref) => {
   const pixiContainerRef = useRef(null);
@@ -17,8 +17,8 @@ const ImageViewer = forwardRef((props, ref) => {
         }
 
         if (pixiContainerRef.current) {
-          console.log('Initializing PIXI application...');  // 调试日志
-          
+          console.log("Initializing PIXI application...");
+
           const app = new PIXI.Application();
           await app.init({
             width: pixiContainerRef.current.clientWidth,
@@ -26,7 +26,7 @@ const ImageViewer = forwardRef((props, ref) => {
             backgroundColor: 0x000000,
             antialias: true,
             clearBeforeRender: true,
-            powerPreference: 'high-performance',
+            powerPreference: "high-performance",
             hello: true,
             resizeTo: pixiContainerRef.current,
           });
@@ -34,31 +34,33 @@ const ImageViewer = forwardRef((props, ref) => {
           pixiAppRef.current = app;
           pixiContainerRef.current.appendChild(app.canvas);
 
-          console.log('Getting image data...');  // 调试日志
-          const imageResult = await imageDataService.getImageData();
-          console.log('Got image result:', imageResult);  // 调试日志
+          console.log("Getting image data...");
+          const [imageData, width, height] =
+            await imageDataService.getImageData();
+          console.log(
+            `Received image data: ${width}x${height}, data length: ${imageData.length}`
+          );
 
-          if (imageResult && Array.isArray(imageResult) && imageResult.length >= 3) {
-            const imageData = new Uint8Array(imageResult[0]);
-            const width = imageResult[1];
-            const height = imageResult[2];
-
-            console.log(`Creating canvas with dimensions: ${width}x${height}`);  // 调试日志
-
-            const canvas = document.createElement('canvas');
+          if (imageData && width && height) {
+            const canvas = document.createElement("canvas");
             canvas.width = width;
             canvas.height = height;
-            const ctx = canvas.getContext('2d');
+            const ctx = canvas.getContext("2d");
+
+            // 创建正确的ImageData对象
             const imgData = new ImageData(
-              new Uint8ClampedArray(imageData),
+              new Uint8ClampedArray(imageData.buffer),
               width,
               height
             );
+
             ctx.putImageData(imgData, 0, 0);
 
+            // 创建PIXI纹理和精灵
             const texture = PIXI.Texture.from(canvas);
             const sprite = new PIXI.Sprite(texture);
 
+            // 计算缩放以适应容器
             const scaleX = app.screen.width / width;
             const scaleY = app.screen.height / height;
             const scale = Math.min(scaleX, scaleY) * 0.9;
@@ -68,18 +70,21 @@ const ImageViewer = forwardRef((props, ref) => {
             sprite.y = app.screen.height / 2;
             sprite.anchor.set(0.5);
 
+            // 启用交互
+            sprite.interactive = true;
+            sprite.cursor = "pointer";
+
             app.stage.addChild(sprite);
             spriteRef.current = sprite;
-            console.log('Sprite added to stage');  // 调试日志
+            console.log("Sprite successfully added to stage");
           }
         }
       } catch (error) {
-        console.error('Error initializing PixiJS:', error);
-        // 如果失败，尝试重新初始化
+        console.error("Error initializing PixiJS:", error);
         if (!initializationTimeout.current) {
-          console.log('Scheduling retry...');  // 调试日志
+          console.log("Scheduling retry...");
           initializationTimeout.current = setTimeout(() => {
-            console.log('Retrying initialization...');  // 调试日志
+            console.log("Retrying initialization...");
             initializationTimeout.current = null;
             initPixiApp();
           }, 1000);
@@ -108,18 +113,19 @@ const ImageViewer = forwardRef((props, ref) => {
     <div
       ref={pixiContainerRef}
       style={{
-        width: '100%',
-        height: '100%',
-        position: 'absolute',
+        width: "100%",
+        height: "100%",
+        position: "absolute",
         top: 0,
         left: 0,
-        overflow: 'hidden',
+        overflow: "hidden",
         zIndex: 2,
+        backgroundColor: "#000",
       }}
     />
   );
 });
 
-ImageViewer.displayName = 'ImageViewer';
+ImageViewer.displayName = "ImageViewer";
 
 export default ImageViewer;
