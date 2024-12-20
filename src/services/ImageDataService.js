@@ -1,72 +1,87 @@
-// services/ImageDataService.js
 class ImageDataService {
-    constructor() {
-      this.retryCount = 0;
-      this.maxRetries = 10;
-      this.retryInterval = 500;
-    }
-  
-    async waitForImageHandler() {
-      return new Promise((resolve, reject) => {
-        const checkHandler = () => {
-          try {
-            // 获取同步代理对象
-            const handler = window.chrome?.webview?.hostObjects?.sync?.imageHandler;
-            if (handler) {
-              resolve(handler);
-            } else if (this.retryCount < this.maxRetries) {
-              this.retryCount++;
-              setTimeout(checkHandler, this.retryInterval);
-            } else {
-              reject(new Error("WebView2 image handler not available after retries"));
-            }
-          } catch (error) {
-            if (this.retryCount < this.maxRetries) {
-              this.retryCount++;
-              setTimeout(checkHandler, this.retryInterval);
-            } else {
-              reject(error);
-            }
-          }
-        };
-        checkHandler();
-      });
-    }
-  
-    base64ToUint8Array(base64) {
-      const binaryString = atob(base64);
-      const len = binaryString.length;
-      const bytes = new Uint8Array(len);
-      for (let i = 0; i < len; i++) {
-        bytes[i] = binaryString.charCodeAt(i);
-      }
-      return bytes;
-    }
-  
-    async getImageData() {
+  constructor() {
+    this.retryCount = 0;
+    this.maxRetries = 10;
+    this.retryInterval = 500;
+    this.setupSharedBufferHandler();
+  }
+
+  setupSharedBufferHandler() {
+    window.chrome.webview.addEventListener('sharedbufferreceived', async (e) => {
       try {
-        const imageHandler = await this.waitForImageHandler();
-        console.log("Image handler found:", imageHandler);
-  
-        // 正确的WebView2异步调用方式
-        const result = await window.chrome.webview.hostObjects.imageHandler.getImageData;
-        console.log("Raw image data received:", result);
-  
-        if (result && Array.isArray(result) && result.length >= 3) {
-          // 将Base64字符串转换为Uint8Array
-          const imageData = this.base64ToUint8Array(result[0]);
-          const width = result[1];
-          const height = result[2];
-  
-          return [imageData, width, height];
-        } else {
-          throw new Error("Invalid image data format received");
+        if (e.additionalData?.type === 'image') {
+          const buffer = e.getBuffer();
+          const imageData = new Uint8Array(buffer);
+          const width = e.additionalData.width;
+          const height = e.additionalData.height;
+          
+          // Store the received image data
+          this.lastReceivedImage = {
+            data: imageData,
+            width: width,
+            height: height
+          };
+
+          // Notify any listeners that new image data is available
+          if(this.onImageDataReceived) {
+            this.onImageDataReceived(imageData, width, height);
+          }
         }
       } catch (error) {
-        console.error("Error in getImageData:", error);
-        throw error;
+        console.error('Error processing shared buffer:', error);
       }
+    });
+  }
+
+  async waitForImageHandler() {
+    return new Promise((resolve, reject) => {
+      const checkHandler = () => {
+        try {
+          const handler = window.chrome?.webview?.hostObjects?.sync?.imageHandler;
+          if (handler) {
+            resolve(handler);
+          } else if (this.retryCount < this.maxRetries) {
+            this.retryCount++;
+            setTimeout(checkHandler, this.retryInterval);
+          } else {
+            reject(new Error("WebView2 image handler not available after retries"));
+          }
+        } catch (error) {
+          if (this.retryCount < this.maxRetries) {
+            this.retryCount++;
+            setTimeout(checkHandler, this.retryInterval);
+          } else {
+            reject(error);
+          }
+        }
+      };
+      checkHandler();
+    });
+  }
+
+  async loadImage(filePath) {
+    try {
+      const imageHandler = await this.waitForImageHandler();
+      return await imageHandler.loadImage(filePath);
+    } catch (error) {
+      console.error("Error loading image:", error);
+      throw error;
     }
   }
-  
-  export const imageDataService = new ImageDataService();
+
+  async getImageData() {
+    // Return the last received image data if available
+    if (this.lastReceivedImage) {
+      const {data, width, height} = this.lastReceivedImage;
+      return [data, width, height];
+    }
+    throw new Error("No image data available");
+  }
+
+  // Register a callback to be notified when new image data is received
+  onImageReceived(callback) {
+    this.onImageDataReceived = callback;
+  }
+}
+
+export const imageDataService = new ImageDataService();

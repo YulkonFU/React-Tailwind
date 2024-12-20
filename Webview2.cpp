@@ -4,155 +4,126 @@
 #include <WebView2.h>
 #include <string>
 #include <vector>
-#include <atlenc.h>
-#include <wincrypt.h>
+#include <gdiplus.h>
+#include <memory>
+#include <fstream>
 
-// 添加库链接
+// Add required libs
+#pragma comment(lib, "gdiplus.lib")
 #pragma comment(lib, "crypt32.lib")
 
 using namespace Microsoft::WRL;
+using namespace Gdiplus;
 
 HWND hWnd;
 wil::com_ptr<ICoreWebView2Controller> webViewController;
 wil::com_ptr<ICoreWebView2> webViewWindow;
+wil::com_ptr<ICoreWebView2Environment> webViewEnvironment;
 
-// 图像数据结构
-struct ImageData {
-    std::vector<BYTE> data;
-    UINT width;
-    UINT height;
-};
-
-// ImageHandler 类定义
+// ImageHandler class definition
 class ImageHandler : public Microsoft::WRL::RuntimeClass<
     Microsoft::WRL::RuntimeClassFlags<Microsoft::WRL::ClassicCom>,
-    IDispatch> {
+    IDispatch>
+{
 private:
-    ImageData imageData;
+    std::vector<BYTE> imageData;
+    UINT width;
+    UINT height;
+    bool loaded;
+    // 移除 GdiplusStartupInput 和句柄的重复使用
+    // GdiplusStartup/GdiplusShutdown 全局只调用一次
+    // 这里仅保留标记即可
+    // GdiplusStartupInput gdiplusStartupInput;
+    // ULONG_PTR gdiplusToken;
 
-    std::wstring ConvertToWString(const std::string& str) {
-        if (str.empty()) return std::wstring();
-        int size = MultiByteToWideChar(CP_UTF8, 0, &str[0], (int)str.size(), NULL, 0);
-        std::wstring result(size, 0);
-        MultiByteToWideChar(CP_UTF8, 0, &str[0], (int)str.size(), &result[0], size);
-        return result;
-    }
+    bool LoadImageFile(const wchar_t* filePath)
+    {
+        // 不再在此处调用 GdiplusStartup / GdiplusShutdown
+        // 仅使用 GDI+ 读取图像
 
-    void InitializeImageData() {
-        imageData.width = 640;
-        imageData.height = 480;
-        UINT dataSize = imageData.width * imageData.height * 4;  // RGBA
-        imageData.data.resize(dataSize);
-
-        for (UINT y = 0; y < imageData.height; y++) {
-            for (UINT x = 0; x < imageData.width; x++) {
-                UINT index = (y * imageData.width + x) * 4;
-                float normalizedX = (float)x / imageData.width;
-                float normalizedY = (float)y / imageData.height;
-
-                imageData.data[index] = (BYTE)(255 * normalizedX);     // R
-                imageData.data[index + 1] = (BYTE)(255 * normalizedY); // G
-                imageData.data[index + 2] = (BYTE)(255 * (1 - normalizedX)); // B
-                imageData.data[index + 3] = 255;                       // A
+        // 改为使用原始指针，手动管理生命周期
+        Bitmap* bitmap = Bitmap::FromFile(filePath);
+        if (!bitmap || bitmap->GetLastStatus() != Ok)
+        {
+            if (bitmap)
+            {
+                delete bitmap;
             }
-        }
-    }
-
-    // 使用 ATL 的 Base64 编码替代 CryptBinaryToString
-    HRESULT EncodeBase64(const std::vector<BYTE>& data, std::string& base64Str) {
-        int base64Len = Base64EncodeGetRequiredLength(data.size());
-        base64Str.resize(base64Len);
-
-        BOOL result = Base64Encode(
-            data.data(),
-            data.size(),
-            &base64Str[0],
-            &base64Len,
-            ATL_BASE64_FLAG_NOCRLF
-        );
-
-        if (!result) {
-            return E_FAIL;
+            return false;
         }
 
-        base64Str.resize(base64Len);
-        return S_OK;
-    }
+        width = bitmap->GetWidth();
+        height = bitmap->GetHeight();
 
-    HRESULT CreateSafeArray(const std::vector<BYTE>& data, UINT width, UINT height, VARIANT* pResult) {
-        // 使用 ATL Base64 编码
-        std::string base64Str;
-        HRESULT hr = EncodeBase64(data, base64Str);
-        if (FAILED(hr)) return hr;
+        BitmapData bmpData;
+        Rect rect(0, 0, width, height);
+        if (bitmap->LockBits(&rect, ImageLockModeRead, PixelFormat32bppARGB, &bmpData) == Ok)
+        {
+            // Create shared buffer
+            size_t bufferSize = width * height * 4;
+            std::vector<BYTE> buffer(bufferSize);
+            memcpy(buffer.data(), bmpData.Scan0, bufferSize);
 
-        // 创建SAFEARRAY
-        SAFEARRAYBOUND bounds[1];
-        bounds[0].lLbound = 0;
-        bounds[0].cElements = 3;
-        SAFEARRAY* psa = SafeArrayCreate(VT_VARIANT, 1, bounds);
-        if (!psa) return E_OUTOFMEMORY;
+            // Convert std::wstring to LPCWSTR
+            std::wstring jsonMessage = L"{\"type\":\"image\",\"width\":" + std::to_wstring(width) +
+                L",\"height\":" + std::to_wstring(height) + L",\"data\":\"" +
+                std::wstring(buffer.begin(), buffer.end()) + L"\"}";
 
-        try {
-            // 添加Base64数据
-            LONG index = 0;
-            VARIANT var;
-            VariantInit(&var);
-            var.vt = VT_BSTR;
-            var.bstrVal = SysAllocString(ConvertToWString(base64Str).c_str());
-            hr = SafeArrayPutElement(psa, &index, &var);
-            if (FAILED(hr)) throw hr;
-            VariantClear(&var);
+            webViewWindow->PostWebMessageAsJson(jsonMessage.c_str());
 
-            // 添加宽度
-            index = 1;
-            VariantInit(&var);
-            var.vt = VT_UI4;
-            var.ulVal = width;
-            hr = SafeArrayPutElement(psa, &index, &var);
-            if (FAILED(hr)) throw hr;
-
-            // 添加高度
-            index = 2;
-            VariantInit(&var);
-            var.vt = VT_UI4;
-            var.ulVal = height;
-            hr = SafeArrayPutElement(psa, &index, &var);
-            if (FAILED(hr)) throw hr;
-
-            // 设置返回值
-            pResult->vt = VT_ARRAY | VT_VARIANT;
-            pResult->parray = psa;
-            return S_OK;
+            bitmap->UnlockBits(&bmpData);
+            loaded = true;
         }
-        catch (HRESULT hr) {
-            SafeArrayDestroy(psa);
-            return hr;
+        else
+        {
+            loaded = false;
         }
+
+        // 手动释放 Bitmap 对象
+        delete bitmap;
+        return loaded;
     }
 
 public:
-    ImageHandler() {
-        InitializeImageData();
+    ImageHandler() : loaded(false) {}
+
+    HRESULT LoadDefaultImage()
+    {
+        // 替换为你的默认图片路径
+        const wchar_t* defaultImagePath = L"C:\\Users\\fuyuk\\Downloads\\test.png";
+
+        if (LoadImageFile(defaultImagePath))
+        {
+            OutputDebugString(L"Default image loaded successfully\n");
+            return S_OK;
+        }
+        else
+        {
+            OutputDebugString(L"Failed to load default image\n");
+            return E_FAIL;
+        }
     }
 
-    STDMETHOD(GetTypeInfoCount)(UINT* pctinfo) override {
+    // IDispatch implementation
+    STDMETHOD(GetTypeInfoCount)(UINT* pctinfo) override
+    {
         *pctinfo = 0;
         return S_OK;
     }
 
-    STDMETHOD(GetTypeInfo)(UINT iTInfo, LCID lcid, ITypeInfo** ppTInfo) override {
+    STDMETHOD(GetTypeInfo)(UINT iTInfo, LCID lcid, ITypeInfo** ppTInfo) override
+    {
         return E_NOTIMPL;
     }
 
     STDMETHOD(GetIDsOfNames)(REFIID riid, LPOLESTR* rgszNames, UINT cNames,
-        LCID lcid, DISPID* rgDispId) override {
-        if (!rgszNames || !rgDispId) return E_INVALIDARG;
-
-        if (cNames == 1 && wcscmp(rgszNames[0], L"getImageData") == 0) {
+        LCID lcid, DISPID* rgDispId) override
+    {
+        if (wcscmp(rgszNames[0], L"loadImage") == 0)
+        {
             rgDispId[0] = 1;
             return S_OK;
         }
-
         return DISP_E_UNKNOWNNAME;
     }
 
@@ -160,21 +131,32 @@ public:
         WORD wFlags, DISPPARAMS* pDispParams, VARIANT* pVarResult,
         EXCEPINFO* pExcepInfo, UINT* puArgErr) override
     {
-        if (dispIdMember == 1) { // getImageData
-            if (!pVarResult) return E_POINTER;
-            return CreateSafeArray(imageData.data, imageData.width, imageData.height, pVarResult);
+        if (dispIdMember == 1) // loadImage
+        {
+            if (pDispParams->cArgs != 1 || pDispParams->rgvarg[0].vt != VT_BSTR)
+                return E_INVALIDARG;
+
+            bool success = LoadImageFile(pDispParams->rgvarg[0].bstrVal);
+
+            if (pVarResult)
+            {
+                pVarResult->vt = VT_BOOL;
+                pVarResult->boolVal = success ? VARIANT_TRUE : VARIANT_FALSE;
+            }
+            return S_OK;
         }
         return DISP_E_MEMBERNOTFOUND;
     }
 };
 
-// WindowProc 实现保持不变
+// WindowProc implementation remains unchanged
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
     switch (uMsg)
     {
     case WM_SIZE:
-        if (webViewController != nullptr) {
+        if (webViewController != nullptr)
+        {
             RECT bounds;
             GetClientRect(hWnd, &bounds);
             webViewController->put_Bounds(bounds);
@@ -191,11 +173,15 @@ void InitializeWebView2()
 {
     CreateCoreWebView2EnvironmentWithOptions(nullptr, nullptr, nullptr,
         Callback<ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler>(
-            [](HRESULT result, ICoreWebView2Environment* env) -> HRESULT {
+            [](HRESULT result, ICoreWebView2Environment* env) -> HRESULT
+            {
+                webViewEnvironment = env;  // 保存环境引用
                 env->CreateCoreWebView2Controller(hWnd,
                     Callback<ICoreWebView2CreateCoreWebView2ControllerCompletedHandler>(
-                        [](HRESULT result, ICoreWebView2Controller* controller) -> HRESULT {
-                            if (controller != nullptr) {
+                        [](HRESULT result, ICoreWebView2Controller* controller) -> HRESULT
+                        {
+                            if (controller != nullptr)
+                            {
                                 webViewController = controller;
                                 webViewController->get_CoreWebView2(&webViewWindow);
 
@@ -208,7 +194,7 @@ void InitializeWebView2()
                                 Settings->put_AreDevToolsEnabled(TRUE);
 
                                 // 注册图像处理器
-                                ComPtr<IDispatch> imageHandler = Microsoft::WRL::Make<ImageHandler>();
+                                auto imageHandler = Microsoft::WRL::Make<ImageHandler>();
                                 VARIANT var;
                                 VariantInit(&var);
                                 var.vt = VT_DISPATCH;
@@ -222,6 +208,9 @@ void InitializeWebView2()
 
                                 // 导航到本地服务器
                                 webViewWindow->Navigate(L"http://localhost:5173/");
+
+                                // 加载默认图片
+                                imageHandler->LoadDefaultImage();
                             }
                             return S_OK;
                         }).Get());
@@ -231,6 +220,11 @@ void InitializeWebView2()
 
 int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR, int nCmdShow)
 {
+    // 在应用启动时初始化 GDI+
+    GdiplusStartupInput gdiplusStartupInput;
+    ULONG_PTR gdiplusToken = 0;
+    GdiplusStartup(&gdiplusToken, &gdiplusStartupInput, nullptr);
+
     const wchar_t CLASS_NAME[] = L"XRay Viewer Window";
 
     WNDCLASS wc = {};
@@ -253,7 +247,10 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR, int nCmdShow)
         nullptr
     );
 
-    if (hWnd == nullptr) {
+    if (hWnd == nullptr)
+    {
+        // 若窗口创建失败，关闭 GDI+
+        GdiplusShutdown(gdiplusToken);
         return 0;
     }
 
@@ -263,10 +260,13 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR, int nCmdShow)
     InitializeWebView2();
 
     MSG msg = {};
-    while (GetMessage(&msg, nullptr, 0, 0)) {
+    while (GetMessage(&msg, nullptr, 0, 0))
+    {
         TranslateMessage(&msg);
         DispatchMessage(&msg);
     }
 
+    // 在应用结束前一次性关闭 GDI+
+    GdiplusShutdown(gdiplusToken);
     return 0;
 }
