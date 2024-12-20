@@ -33,14 +33,15 @@ class ImageDataService {
       });
     }
   
-    base64ToUint8Array(base64) {
-      const binaryString = atob(base64);
-      const len = binaryString.length;
-      const bytes = new Uint8Array(len);
-      for (let i = 0; i < len; i++) {
-        bytes[i] = binaryString.charCodeAt(i);
+    async loadImage(filePath) {
+      try {
+        const imageHandler = await this.waitForImageHandler();
+        console.log("Calling loadImage with path:", filePath);
+        return await imageHandler.loadImage(filePath);
+      } catch (error) {
+        console.error("Error loading image:", error);
+        throw error;
       }
-      return bytes;
     }
   
     async getImageData() {
@@ -48,20 +49,28 @@ class ImageDataService {
         const imageHandler = await this.waitForImageHandler();
         console.log("Image handler found:", imageHandler);
   
-        // 正确的WebView2异步调用方式
-        const result = await window.chrome.webview.hostObjects.imageHandler.getImageData;
+        // 直接调用 getImageData 方法
+        const rawResult = await imageHandler.getImageData();
+        const result = await rawResult;  // 确保解析完成
+        
         console.log("Raw image data received:", result);
   
         if (result && Array.isArray(result) && result.length >= 3) {
-          // 将Base64字符串转换为Uint8Array
-          const imageData = this.base64ToUint8Array(result[0]);
+          const base64Str = result[0];
+          const binary = atob(base64Str);
+          const bytes = new Uint8Array(binary.length);
+          for (let i = 0; i < binary.length; i++) {
+            bytes[i] = binary.charCodeAt(i);
+          }
+  
           const width = result[1];
           const height = result[2];
   
-          return [imageData, width, height];
-        } else {
-          throw new Error("Invalid image data format received");
+          console.log(`Decoded image data: ${width}x${height}, length: ${bytes.length}`);
+          return [bytes, width, height];
         }
+        
+        throw new Error("Invalid image data format received");
       } catch (error) {
         console.error("Error in getImageData:", error);
         throw error;

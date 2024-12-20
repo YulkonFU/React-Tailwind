@@ -6,11 +6,16 @@
 #include <vector>
 #include <atlenc.h>
 #include <wincrypt.h>
+#include <gdiplus.h>
+#include <memory>
+#include <fstream>
 
 // 添加库链接
 #pragma comment(lib, "crypt32.lib")
+#pragma comment(lib, "gdiplus.lib")
 
 using namespace Microsoft::WRL;
+using namespace Gdiplus;
 
 HWND hWnd;
 wil::com_ptr<ICoreWebView2Controller> webViewController;
@@ -21,6 +26,9 @@ struct ImageData {
     std::vector<BYTE> data;
     UINT width;
     UINT height;
+    bool loaded;
+
+    ImageData() : width(0), height(0), loaded(false) {}
 };
 
 // ImageHandler 类定义
@@ -29,6 +37,9 @@ class ImageHandler : public Microsoft::WRL::RuntimeClass<
     IDispatch> {
 private:
     ImageData imageData;
+    GdiplusStartupInput gdiplusStartupInput;
+    ULONG_PTR gdiplusToken;
+    bool isGdiplusInitialized;
 
     std::wstring ConvertToWString(const std::string& str) {
         if (str.empty()) return std::wstring();
@@ -38,27 +49,63 @@ private:
         return result;
     }
 
-    void InitializeImageData() {
-        imageData.width = 640;
-        imageData.height = 480;
-        UINT dataSize = imageData.width * imageData.height * 4;  // RGBA
-        imageData.data.resize(dataSize);
-
-        for (UINT y = 0; y < imageData.height; y++) {
-            for (UINT x = 0; x < imageData.width; x++) {
-                UINT index = (y * imageData.width + x) * 4;
-                float normalizedX = (float)x / imageData.width;
-                float normalizedY = (float)y / imageData.height;
-
-                imageData.data[index] = (BYTE)(255 * normalizedX);     // R
-                imageData.data[index + 1] = (BYTE)(255 * normalizedY); // G
-                imageData.data[index + 2] = (BYTE)(255 * (1 - normalizedX)); // B
-                imageData.data[index + 3] = 255;                       // A
+    bool InitializeGdiplus() {
+        if (!isGdiplusInitialized) {
+            if (GdiplusStartup(&gdiplusToken, &gdiplusStartupInput, nullptr) != Ok) {
+                return false;
             }
+            isGdiplusInitialized = true;
         }
+        return true;
     }
 
-    // 使用 ATL 的 Base64 编码替代 CryptBinaryToString
+    bool LoadImageFile(const wchar_t* filePath) {
+        OutputDebugString(L"Starting LoadImageFile\n");
+
+        if (!InitializeGdiplus()) {
+            OutputDebugString(L"Failed to initialize GDI+\n");
+            return false;
+        }
+
+        // 使用智能指针管理Bitmap对象
+        std::unique_ptr<Bitmap> bitmap(Bitmap::FromFile(filePath));
+        if (!bitmap || bitmap->GetLastStatus() != Ok) {
+            OutputDebugString(L"Failed to load bitmap\n");
+            return false;
+        }
+
+        // 获取图像尺寸
+        imageData.width = bitmap->GetWidth();
+        imageData.height = bitmap->GetHeight();
+
+        // 分配内存
+        try {
+            imageData.data.resize(imageData.width * imageData.height * 4);
+        }
+        catch (const std::exception& e) {
+            OutputDebugString(L"Failed to allocate memory for image data\n");
+            return false;
+        }
+
+        // 锁定位图数据
+        BitmapData bitmapData;
+        Rect rect(0, 0, imageData.width, imageData.height);
+        Status status = bitmap->LockBits(&rect, ImageLockModeRead, PixelFormat32bppARGB, &bitmapData);
+
+        if (status == Ok) {
+            // 复制数据
+            memcpy(imageData.data.data(), bitmapData.Scan0, imageData.data.size());
+            bitmap->UnlockBits(&bitmapData);
+            imageData.loaded = true;
+
+            OutputDebugString(L"Image loaded successfully\n");
+            return true;
+        }
+
+        OutputDebugString(L"Failed to lock bitmap bits\n");
+        return false;
+    }
+
     HRESULT EncodeBase64(const std::vector<BYTE>& data, std::string& base64Str) {
         int base64Len = Base64EncodeGetRequiredLength(data.size());
         base64Str.resize(base64Len);
@@ -80,12 +127,10 @@ private:
     }
 
     HRESULT CreateSafeArray(const std::vector<BYTE>& data, UINT width, UINT height, VARIANT* pResult) {
-        // 使用 ATL Base64 编码
         std::string base64Str;
         HRESULT hr = EncodeBase64(data, base64Str);
         if (FAILED(hr)) return hr;
 
-        // 创建SAFEARRAY
         SAFEARRAYBOUND bounds[1];
         bounds[0].lLbound = 0;
         bounds[0].cElements = 3;
@@ -119,7 +164,6 @@ private:
             hr = SafeArrayPutElement(psa, &index, &var);
             if (FAILED(hr)) throw hr;
 
-            // 设置返回值
             pResult->vt = VT_ARRAY | VT_VARIANT;
             pResult->parray = psa;
             return S_OK;
@@ -131,8 +175,13 @@ private:
     }
 
 public:
-    ImageHandler() {
-        InitializeImageData();
+    ImageHandler() : isGdiplusInitialized(false) {}
+
+    ~ImageHandler() {
+        if (isGdiplusInitialized) {
+            GdiplusShutdown(gdiplusToken);
+            isGdiplusInitialized = false;
+        }
     }
 
     STDMETHOD(GetTypeInfoCount)(UINT* pctinfo) override {
@@ -148,9 +197,15 @@ public:
         LCID lcid, DISPID* rgDispId) override {
         if (!rgszNames || !rgDispId) return E_INVALIDARG;
 
-        if (cNames == 1 && wcscmp(rgszNames[0], L"getImageData") == 0) {
-            rgDispId[0] = 1;
-            return S_OK;
+        if (cNames == 1) {
+            if (wcscmp(rgszNames[0], L"getImageData") == 0) {
+                rgDispId[0] = 1;
+                return S_OK;
+            }
+            else if (wcscmp(rgszNames[0], L"loadImage") == 0) {
+                rgDispId[0] = 2;
+                return S_OK;
+            }
         }
 
         return DISP_E_UNKNOWNNAME;
@@ -160,15 +215,68 @@ public:
         WORD wFlags, DISPPARAMS* pDispParams, VARIANT* pVarResult,
         EXCEPINFO* pExcepInfo, UINT* puArgErr) override
     {
-        if (dispIdMember == 1) { // getImageData
-            if (!pVarResult) return E_POINTER;
-            return CreateSafeArray(imageData.data, imageData.width, imageData.height, pVarResult);
+        try {
+            OutputDebugString(L"Invoke called\n");
+
+            switch (dispIdMember) {
+            case 1: { // getImageData
+                OutputDebugString(L"getImageData called\n");
+                if (!pVarResult) {
+                    OutputDebugString(L"pVarResult is null\n");
+                    return E_POINTER;
+                }
+                if (!imageData.loaded) {
+                    OutputDebugString(L"No image data loaded\n");
+                    return E_FAIL;
+                }
+                OutputDebugString(L"Creating safe array\n");
+                HRESULT hr = CreateSafeArray(imageData.data, imageData.width, imageData.height, pVarResult);
+                if (FAILED(hr)) {
+                    OutputDebugString(L"Failed to create safe array\n");
+                }
+                return hr;
+            }
+
+            case 2: { // loadImage
+                OutputDebugString(L"loadImage called\n");
+                if (pDispParams->cArgs != 1) {
+                    OutputDebugString(L"Invalid argument count\n");
+                    return E_INVALIDARG;
+                }
+                if (pDispParams->rgvarg[0].vt != VT_BSTR) {
+                    OutputDebugString(L"Invalid argument type\n");
+                    return E_INVALIDARG;
+                }
+
+                BSTR filePath = pDispParams->rgvarg[0].bstrVal;
+                OutputDebugString(L"Loading image from: ");
+                OutputDebugString(filePath);
+                OutputDebugString(L"\n");
+
+                bool success = LoadImageFile(filePath);
+
+                if (pVarResult) {
+                    pVarResult->vt = VT_BOOL;
+                    pVarResult->boolVal = success ? VARIANT_TRUE : VARIANT_FALSE;
+                }
+                OutputDebugString(success ? L"Image loaded successfully\n" : L"Failed to load image\n");
+                return S_OK;
+            }
+
+            default:
+                OutputDebugString(L"Unknown method called\n");
+                return DISP_E_MEMBERNOTFOUND;
+            }
         }
-        return DISP_E_MEMBERNOTFOUND;
+        catch (...) {
+            OutputDebugString(L"Unhandled exception in Invoke\n");
+            return E_FAIL;
+        }
     }
+
 };
 
-// WindowProc 实现保持不变
+// WindowProc 实现
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
     switch (uMsg)

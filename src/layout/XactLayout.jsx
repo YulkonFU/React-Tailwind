@@ -32,11 +32,14 @@ const XactLayout = () => {
     const input = document.createElement("input");
     input.type = "file";
     input.accept = "image/*";
-    input.onchange = (event) => {
+    input.onchange = async (event) => {
       const file = event.target.files[0];
       if (file && imageViewerRef.current) {
-        const url = URL.createObjectURL(file);
-        imageViewerRef.current.loadImage(url);
+        // 使用文件的完整路径加载图片
+        const success = await imageViewerRef.current.loadImage(file.path);
+        if (!success) {
+          console.error("Failed to load image");
+        }
       }
     };
     input.click();

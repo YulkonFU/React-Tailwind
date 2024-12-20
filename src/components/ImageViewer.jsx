@@ -8,6 +8,59 @@ const ImageViewer = forwardRef((props, ref) => {
   const spriteRef = useRef(null);
   const initializationTimeout = useRef(null);
 
+  const loadAndDisplayImage = async () => {
+    try {
+      console.log("Getting image data...");
+      const [imageData, width, height] = await imageDataService.getImageData();
+      console.log(`Received image data: ${width}x${height}, length: ${imageData.length}`);
+
+      if (!pixiAppRef.current || !imageData || !width || !height) {
+        throw new Error("Invalid image data or PIXI app not initialized");
+      }
+
+      // 创建临时 canvas 并绘制图像数据
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext("2d");
+
+      // 创建 ImageData 对象并绘制到 canvas
+      const imgData = new ImageData(new Uint8ClampedArray(imageData), width, height);
+      ctx.putImageData(imgData, 0, 0);
+
+      // 如果存在旧的精灵，先移除它
+      if (spriteRef.current) {
+        pixiAppRef.current.stage.removeChild(spriteRef.current);
+        spriteRef.current.destroy({ children: true, texture: true, baseTexture: true });
+      }
+
+      // 创建新的纹理和精灵
+      const texture = PIXI.Texture.from(canvas);
+      const sprite = new PIXI.Sprite(texture);
+
+      // 计算适应屏幕的缩放比例
+      const scaleX = pixiAppRef.current.screen.width / width;
+      const scaleY = pixiAppRef.current.screen.height / height;
+      const scale = Math.min(scaleX, scaleY) * 0.9;
+
+      // 设置精灵属性
+      sprite.scale.set(scale);
+      sprite.x = pixiAppRef.current.screen.width / 2;
+      sprite.y = pixiAppRef.current.screen.height / 2;
+      sprite.anchor.set(0.5);
+      sprite.interactive = true;
+      sprite.cursor = "pointer";
+
+      // 添加精灵到舞台
+      pixiAppRef.current.stage.addChild(sprite);
+      spriteRef.current = sprite;
+
+      console.log("Image successfully loaded and displayed");
+    } catch (error) {
+      console.error("Error loading image:", error);
+    }
+  };
+
   useEffect(() => {
     const initPixiApp = async () => {
       try {
@@ -34,50 +87,8 @@ const ImageViewer = forwardRef((props, ref) => {
           pixiAppRef.current = app;
           pixiContainerRef.current.appendChild(app.canvas);
 
-          console.log("Getting image data...");
-          const [imageData, width, height] =
-            await imageDataService.getImageData();
-          console.log(
-            `Received image data: ${width}x${height}, data length: ${imageData.length}`
-          );
-
-          if (imageData && width && height) {
-            const canvas = document.createElement("canvas");
-            canvas.width = width;
-            canvas.height = height;
-            const ctx = canvas.getContext("2d");
-
-            // 创建正确的ImageData对象
-            const imgData = new ImageData(
-              new Uint8ClampedArray(imageData.buffer),
-              width,
-              height
-            );
-
-            ctx.putImageData(imgData, 0, 0);
-
-            // 创建PIXI纹理和精灵
-            const texture = PIXI.Texture.from(canvas);
-            const sprite = new PIXI.Sprite(texture);
-
-            // 计算缩放以适应容器
-            const scaleX = app.screen.width / width;
-            const scaleY = app.screen.height / height;
-            const scale = Math.min(scaleX, scaleY) * 0.9;
-
-            sprite.scale.set(scale);
-            sprite.x = app.screen.width / 2;
-            sprite.y = app.screen.height / 2;
-            sprite.anchor.set(0.5);
-
-            // 启用交互
-            sprite.interactive = true;
-            sprite.cursor = "pointer";
-
-            app.stage.addChild(sprite);
-            spriteRef.current = sprite;
-            console.log("Sprite successfully added to stage");
-          }
+          // 初始化完成后加载图像
+          await loadAndDisplayImage();
         }
       } catch (error) {
         console.error("Error initializing PixiJS:", error);
@@ -108,6 +119,22 @@ const ImageViewer = forwardRef((props, ref) => {
       }
     };
   }, []);
+
+  // 暴露加载新图像的方法
+  React.useImperativeHandle(ref, () => ({
+    loadImage: async (filePath) => {
+      try {
+        const success = await imageDataService.loadImage(filePath);
+        if (success) {
+          await loadAndDisplayImage();
+        }
+        return success;
+      } catch (error) {
+        console.error("Error loading new image:", error);
+        return false;
+      }
+    }
+  }));
 
   return (
     <div
