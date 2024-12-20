@@ -16,7 +16,6 @@ import ImageViewer from "../components/ImageViewer";
 import ImageControls from "../components/ImageControls";
 import XrayControl from "../components/XrayControl";
 import ManipulatorControl from "../components/ManipulatorControl";
-import DetectorControl from "../components/DetectorControl";
 
 const XactLayout = () => {
   const [activeMenu, setActiveMenu] = useState(null);
@@ -267,7 +266,6 @@ const XactLayout = () => {
                 }
               >
                 <ManipulatorControl />
-                <DetectorControl />
               </div>
             </div>
           )}
