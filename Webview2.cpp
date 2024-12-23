@@ -147,8 +147,9 @@ public:
         return E_NOTIMPL;
     }
 
-	// 获取图像数据
+	// 管理图像数据并提供getImageData方法给前端调用
     STDMETHOD(GetIDsOfNames)(REFIID riid, LPOLESTR* rgszNames, UINT cNames,
+        // 处理方法名映射
         LCID lcid, DISPID* rgDispId) override {
         if (!rgszNames || !rgDispId) return E_INVALIDARG;
 
@@ -165,6 +166,7 @@ public:
         WORD wFlags, DISPPARAMS* pDispParams, VARIANT* pVarResult,
         EXCEPINFO* pExcepInfo, UINT* puArgErr) override
     {
+        // 处理方法调用并返回数据
         if (dispIdMember == 1) { // getImageData
             if (!pVarResult) return E_POINTER;
             return CreateSafeArray(imageData.data, imageData.width, imageData.height, pVarResult);
