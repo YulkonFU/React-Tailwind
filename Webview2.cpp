@@ -30,6 +30,7 @@ class ImageHandler : public Microsoft::WRL::RuntimeClass<
 private:
     ImageData imageData;
 
+	// 将 std::string 转换为 std::wstring
     std::wstring ConvertToWString(const std::string& str) {
         if (str.empty()) return std::wstring();
         int size = MultiByteToWideChar(CP_UTF8, 0, &str[0], (int)str.size(), NULL, 0);
@@ -38,12 +39,14 @@ private:
         return result;
     }
 
+	// 初始化图像数据
     void InitializeImageData() {
         imageData.width = 640;
         imageData.height = 480;
         UINT dataSize = imageData.width * imageData.height * 4;  // RGBA
         imageData.data.resize(dataSize);
 
+		// 生成渐变图像
         for (UINT y = 0; y < imageData.height; y++) {
             for (UINT x = 0; x < imageData.width; x++) {
                 UINT index = (y * imageData.width + x) * 4;
@@ -144,6 +147,7 @@ public:
         return E_NOTIMPL;
     }
 
+	// 获取图像数据
     STDMETHOD(GetIDsOfNames)(REFIID riid, LPOLESTR* rgszNames, UINT cNames,
         LCID lcid, DISPID* rgDispId) override {
         if (!rgszNames || !rgDispId) return E_INVALIDARG;
@@ -156,6 +160,7 @@ public:
         return DISP_E_UNKNOWNNAME;
     }
 
+	// 实现 getImageData 方法
     STDMETHOD(Invoke)(DISPID dispIdMember, REFIID riid, LCID lcid,
         WORD wFlags, DISPPARAMS* pDispParams, VARIANT* pVarResult,
         EXCEPINFO* pExcepInfo, UINT* puArgErr) override
@@ -187,6 +192,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
     return DefWindowProc(hwnd, uMsg, wParam, lParam);
 }
 
+// 初始化WebView2
 void InitializeWebView2()
 {
     CreateCoreWebView2EnvironmentWithOptions(nullptr, nullptr, nullptr,
@@ -229,6 +235,7 @@ void InitializeWebView2()
             }).Get());
 }
 
+// 创建窗口
 int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR, int nCmdShow)
 {
     const wchar_t CLASS_NAME[] = L"XRay Viewer Window";

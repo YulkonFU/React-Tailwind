@@ -1,4 +1,3 @@
-// services/ImageDataService.js
 class ImageDataService {
     constructor() {
       this.retryCount = 0;
@@ -6,6 +5,7 @@ class ImageDataService {
       this.retryInterval = 500;
     }
   
+    // 等待图像处理程序
     async waitForImageHandler() {
       return new Promise((resolve, reject) => {
         const checkHandler = () => {
@@ -33,6 +33,7 @@ class ImageDataService {
       });
     }
   
+    // 将Base64字符串转换为Uint8Array
     base64ToUint8Array(base64) {
       const binaryString = atob(base64);
       const len = binaryString.length;
@@ -43,6 +44,7 @@ class ImageDataService {
       return bytes;
     }
   
+    // 从WebView2异步获取图像数据
     async getImageData() {
       try {
         const imageHandler = await this.waitForImageHandler();
