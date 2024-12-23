@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, forwardRef } from "react";
+import { useEffect, useRef, forwardRef } from "react";
 import * as PIXI from "pixi.js";
 import { imageDataService } from "../services/ImageDataService";
 
