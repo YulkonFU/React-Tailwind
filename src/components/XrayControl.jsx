@@ -104,9 +104,9 @@ const XrayControl = ({ onStatusChange }) => {
         style={{
           transform: `translate(${position.x}px, ${position.y}px)`,
           transition: isDragging ? "none" : "transform 0.3s",
-          width: isCollapsed ? "40px" : "320px", // 增加宽度
+          width: isCollapsed ? "160px" : "320px", // 收起时宽度改为160px
           backgroundColor: "white",
-          zIndex: 1000, // 确保在其他组件之上
+          zIndex: 1000,
         }}
       >
         {/* 主控件头部 */}
@@ -114,19 +114,37 @@ const XrayControl = ({ onStatusChange }) => {
           className="cursor-move py-3 px-4 bg-gray-100 rounded-t-lg flex justify-between items-center"
           onMouseDown={handleDragStart}
         >
-          {!isCollapsed && (
-            <h3 className="text-sm font-semibold">X-ray Control</h3>
+          {/* 收起时显示简要信息 */}
+          {isCollapsed ? (
+            <div className="flex items-center space-x-3 w-full">
+              <Radiation
+                className={`w-5 h-5 ${
+                  xrayState.isPowered ? "text-red-500" : "text-gray-400"
+                }`}
+                onClick={handlePowerToggle}
+              />
+              <div className="text-xs">
+                <div>{xrayState.voltage}kV</div>
+                <div>{xrayState.current}µA</div>
+              </div>
+              <button
+                onClick={() => setIsCollapsed(!isCollapsed)}
+                className="p-1.5 hover:bg-gray-200 rounded ml-auto"
+              >
+                <ChevronDown className="w-4 h-4" />
+              </button>
+            </div>
+          ) : (
+            <>
+              <h3 className="text-sm font-semibold">X-ray Control</h3>
+              <button
+                onClick={() => setIsCollapsed(!isCollapsed)}
+                className="p-1.5 hover:bg-gray-200 rounded"
+              >
+                <ChevronUp className="w-4 h-4" />
+              </button>
+            </>
           )}
-          <button
-            onClick={() => setIsCollapsed(!isCollapsed)}
-            className="p-1.5 hover:bg-gray-200 rounded"
-          >
-            {isCollapsed ? (
-              <ChevronDown className="w-4 h-4" />
-            ) : (
-              <ChevronUp className="w-4 h-4" />
-            )}
-          </button>
         </div>
 
         {/* 展开时显示的内容 */}

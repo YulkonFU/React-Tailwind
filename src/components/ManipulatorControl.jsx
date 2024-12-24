@@ -93,10 +93,36 @@ const ManipulatorControl = () => {
 
   return (
     <div className="p-4 bg-gray-100 rounded-lg space-y-4">
-      {/* Header */}
+      {/* Header with Reference */}
       <div className="flex items-center justify-between mb-4">
-        <h3 className="text-sm font-semibold">Manipulator Control</h3>
-        {/* 更新状态指示器 */}
+        <div className="flex items-center gap-4">
+          <h3 className="text-sm font-semibold">Manipulator Control</h3>
+          <button
+            onClick={() => {
+              setManipulatorState((prev) => ({
+                ...prev,
+                isReferencing: true,
+                status: "CNC_DRIVING_REF",
+              }));
+              setTimeout(() => {
+                setManipulatorState((prev) => ({
+                  ...prev,
+                  isReferencing: false,
+                  status: "CNC_STAND_STILL",
+                }));
+              }, 2000);
+            }}
+            className={`p-2 rounded flex items-center justify-center gap-2 ${
+              manipulatorState.isReferencing
+                ? "bg-blue-500 text-white"
+                : "bg-white hover:bg-gray-50"
+            }`}
+          >
+            <Lock className="w-4 h-4" />
+            <span>Reference</span>
+          </button>
+        </div>
+        {/* Status indicator */}
         <div className="flex items-center space-x-2">
           <span
             className={`inline-block w-2 h-2 rounded-full ${
@@ -219,88 +245,55 @@ const ManipulatorControl = () => {
         )}
       </div>
 
-      {/* Control Buttons */}
-      <div className="grid grid-cols-2 gap-2">
+      {/* Status and Controls */}
+      <div className="flex items-center justify-between p-2 bg-white rounded gap-2">
+        {/* Joystick Control */}
         <button
-          onClick={() => {
+          onClick={() =>
             setManipulatorState((prev) => ({
               ...prev,
-              isReferencing: true,
-              status: "CNC_DRIVING_REF",
-            }));
-            setTimeout(() => {
-              setManipulatorState((prev) => ({
-                ...prev,
-                isReferencing: false,
-                status: "CNC_STAND_STILL",
-              }));
-            }, 2000);
-          }}
-          className={`p-2 rounded flex items-center justify-center gap-2 ${
-            manipulatorState.isReferencing
-              ? "bg-blue-500 text-white"
-              : "bg-white hover:bg-gray-50"
+              isJoyEnabled: !prev.isJoyEnabled,
+            }))
+          }
+          className={`flex items-center gap-2 px-3 py-1.5 rounded ${
+            manipulatorState.isJoyEnabled
+              ? "bg-green-500 text-white"
+              : "bg-gray-200 hover:bg-gray-300"
           }`}
+          title="Joystick Control"
         >
-          <Lock className="w-4 h-4" />
-          <span>Reference</span>
-        </button>
-      </div>
-
-      {/* Status and Controls */}
-      <div className="space-y-2">
-        <div className="flex items-center justify-between p-2 bg-white rounded">
-          <div className="flex items-center gap-2">
-            <Gamepad2 className="w-4 h-4" />
-            <span className="text-sm">Joystick Control</span>
-          </div>
-          <button
-            onClick={() =>
-              setManipulatorState((prev) => ({
-                ...prev,
-                isJoyEnabled: !prev.isJoyEnabled,
-              }))
-            }
-            className={`px-3 py-1 rounded text-sm ${
-              manipulatorState.isJoyEnabled
-                ? "bg-green-500 text-white"
-                : "bg-gray-200 hover:bg-gray-300"
-            }`}
-          >
+          <Gamepad2 className="w-6 h-6" />
+          <span className="text-sm">
             {manipulatorState.isJoyEnabled ? "Enabled" : "Disabled"}
-          </button>
-        </div>
-
-        <div className="flex items-center justify-between p-2 bg-white rounded">
-          <div className="flex items-center gap-2">
-            <Radar className="w-4 h-4" />
-            <span className="text-sm">Collision Detection</span>
-          </div>
-          <span
-            className={`px-2 py-1 rounded text-xs ${
-              manipulatorState.isCollisionDetected
-                ? "bg-red-100 text-red-600"
-                : "bg-green-100 text-green-600"
-            }`}
-          >
-            {manipulatorState.isCollisionDetected ? "Detected" : "Clear"}
           </span>
-        </div>
+        </button>
 
-        <div className="flex items-center justify-between p-2 bg-white rounded">
-          <div className="flex items-center gap-2">
-            <DoorClosed className="w-4 h-4" />
-            <span className="text-sm">Door Status</span>
-          </div>
-          <span
-            className={`px-2 py-1 rounded text-xs ${
-              manipulatorState.isDoorOpen
-                ? "bg-red-100 text-red-600"
-                : "bg-green-100 text-green-600"
-            }`}
-          >
-            {manipulatorState.isDoorOpen ? "Open" : "Closed"}
-          </span>
+        {/* Collision Detection */}
+        <button
+          onClick={() =>
+            setManipulatorState((prev) => ({
+              ...prev,
+              isCollisionDetected: !prev.isCollisionDetected,
+            }))
+          }
+          className={`p-2 rounded hover:bg-gray-100 transition-colors ${
+            manipulatorState.isCollisionDetected
+              ? "text-red-500"
+              : "text-green-500"
+          }`}
+          title="Collision Detection"
+        >
+          <Radar className="w-6 h-6" />
+        </button>
+
+        {/* Door Status */}
+        <div
+          className={`p-2 rounded ${
+            manipulatorState.isDoorOpen ? "text-red-500" : "text-green-500"
+          }`}
+          title="Door Status"
+        >
+          <DoorClosed className="w-6 h-6" />
         </div>
       </div>
     </div>
