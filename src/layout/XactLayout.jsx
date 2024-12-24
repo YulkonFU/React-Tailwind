@@ -12,12 +12,12 @@ import {
   EyeOff,
   Pencil,
 } from "lucide-react";
-import FileMenu from "../components/FileMenu";
-import EditMenu from "../components/EditMenu";
-import ViewMenu from "../components/ViewMenu";
-import ModulesMenu from "../components/ModulesMenu";
-import SetupMenu from "../components/SetupMenu";
-import HelpMenu from "../components/HelpMenu";
+import FileMenu from "../components/menu/FileMenu";
+import EditMenu from "../components/menu/EditMenu";
+import ViewMenu from "../components/menu/ViewMenu";
+import ModulesMenu from "../components/menu/ModulesMenu";
+import SetupMenu from "../components/menu/SetupMenu";
+import HelpMenu from "../components/menu/HelpMenu";
 import ImageViewer from "../components/ImageViewer";
 import ImageControls from "../components/ImageControls";
 import XrayControl from "../components/XrayControl";
