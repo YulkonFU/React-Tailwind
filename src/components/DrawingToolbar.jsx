@@ -9,7 +9,10 @@ const DrawingToolbar = ({
   onClear 
 }) => {
   return (
-    <div className="absolute left-16 top-1/2 -translate-y-1/2 bg-white/80 backdrop-blur-sm rounded-lg shadow-lg p-2">
+    <div 
+    className="fixed left-1 top-1/2 -translate-y-1/2 bg-white/80 backdrop-blur-sm rounded-lg shadow-lg p-2"
+    style={{ zIndex: 1000 }}
+    >
       <div className="flex flex-col gap-2">
         <button
           onClick={() => onToolSelect('arrow')}

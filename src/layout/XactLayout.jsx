@@ -281,59 +281,6 @@ const XactLayout = () => {
               currentTool={drawingTool}
             />
 
-            {/* Drawing Tools Panel */}
-            <div className="absolute top-4 right-4 bg-white/80 backdrop-blur-sm rounded-lg shadow-lg p-2">
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => handleToolSelect("arrow")}
-                  className={`p-2 rounded-lg transition-colors ${
-                    drawingTool === "arrow"
-                      ? "bg-blue-500 text-white"
-                      : "hover:bg-gray-200"
-                  }`}
-                  title="箭头工具"
-                >
-                  <ArrowRight className="w-5 h-5" />
-                </button>
-
-                <button
-                  onClick={() => handleToolSelect("circle")}
-                  className={`p-2 rounded-lg transition-colors ${
-                    drawingTool === "circle"
-                      ? "bg-blue-500 text-white"
-                      : "hover:bg-gray-200"
-                  }`}
-                  title="圆形工具"
-                >
-                  <Circle className="w-5 h-5" />
-                </button>
-
-                <div className="w-px h-6 bg-gray-300" />
-
-                <button
-                  onClick={handleToggleOverlay}
-                  className="p-2 rounded-lg hover:bg-gray-200 transition-colors"
-                  title={showOverlay ? "隐藏标注" : "显示标注"}
-                >
-                  {showOverlay ? (
-                    <EyeOff className="w-5 h-5" />
-                  ) : (
-                    <Eye className="w-5 h-5" />
-                  )}
-                </button>
-
-                <div className="w-px h-6 bg-gray-300" />
-
-                <button
-                  onClick={() => handleSaveImage(true)}
-                  className="p-2 rounded-lg hover:bg-gray-200 transition-colors"
-                  title="保存带标注的图像"
-                >
-                  <Download className="w-5 h-5" />
-                </button>
-              </div>
-            </div>
-
             <ImageControls
               isExpanded={isExpanded}
               onToggleExpand={handleToggleExpand}
