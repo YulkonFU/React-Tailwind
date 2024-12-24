@@ -5,6 +5,12 @@ import {
   Grid,
   Filter,
   MessageSquare,
+  Download,
+  Circle,
+  ArrowRight,
+  Eye,
+  EyeOff,
+  Pencil,
 } from "lucide-react";
 import FileMenu from "../components/FileMenu";
 import EditMenu from "../components/EditMenu";
@@ -17,6 +23,7 @@ import ImageControls from "../components/ImageControls";
 import XrayControl from "../components/XrayControl";
 import ManipulatorControl from "../components/ManipulatorControl";
 import DetectorControl from "../components/DetectorControl";
+import DrawingToolbar from "../components/DrawingToolbar";
 
 const XactLayout = () => {
   const [activeMenu, setActiveMenu] = useState(null);
@@ -25,6 +32,9 @@ const XactLayout = () => {
   const menuRef = useRef(null);
   const spriteRef = useRef(null);
   const imageViewerRef = useRef(null);
+  const [drawingTool, setDrawingTool] = useState("arrow"); // 'arrow' | 'circle'
+  const [showOverlay, setShowOverlay] = useState(true);
+  const [showDrawingTools, setShowDrawingTools] = useState(false);
 
   // 处理加载图片
   const handleLoadImage = () => {
@@ -43,9 +53,36 @@ const XactLayout = () => {
   };
 
   // 处理保存图片
-  const handleSaveImage = () => {
+  const handleSaveImage = (includeOverlay = true) => {
     if (imageViewerRef.current) {
-      imageViewerRef.current.saveImage();
+      const saveOptions = {
+        includeOverlay,
+        filename: `xray_image_${new Date().getTime()}.png`,
+      };
+      imageViewerRef.current.saveImage(saveOptions);
+    }
+  };
+
+  // 处理工具选择
+  const handleToolSelect = (tool) => {
+    setDrawingTool(tool);
+    if (imageViewerRef.current) {
+      imageViewerRef.current.setDrawingTool(tool);
+    }
+  };
+
+  // 清除标注
+  const handleClearOverlay = () => {
+    if (imageViewerRef.current) {
+      imageViewerRef.current.clearOverlay();
+    }
+  };
+
+  // 切换 overlay 显示/隐藏
+  const handleToggleOverlay = () => {
+    setShowOverlay(!showOverlay);
+    if (imageViewerRef.current) {
+      imageViewerRef.current.toggleOverlay(!showOverlay);
     }
   };
 
@@ -142,10 +179,32 @@ const XactLayout = () => {
         <button className="p-2 text-black hover:bg-gray-700 rounded">
           <MessageSquare className="w-6 h-6" />
         </button>
+        <button
+          onClick={() => setShowDrawingTools(!showDrawingTools)}
+          className={`p-2 rounded-lg transition-colors ${
+            showDrawingTools
+              ? "bg-blue-500 text-white"
+              : "bg-white hover:bg-gray-100"
+          }`}
+          title="绘图工具"
+        >
+          <Pencil className="w-5 h-5" />
+        </button>
       </div>
 
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col">
+        {/* 绘图工具栏 */}
+        {showDrawingTools && (
+          <DrawingToolbar
+            currentTool={drawingTool}
+            showOverlay={showOverlay}
+            onToolSelect={handleToolSelect}
+            onToggleOverlay={handleToggleOverlay}
+            onClear={handleClearOverlay}
+          />
+        )}
+
         {/* Top Menu Bar */}
         <div
           className="bg-white h-12 border-b flex items-center px-4 gap-4 relative"
@@ -209,19 +268,72 @@ const XactLayout = () => {
               isExpanded ? "w-full h-full" : ""
             }`}
             style={{
-              width: "500px",
-              height: "500px",
+              width: "700px",
+              height: "700px",
               position: "relative",
               zIndex: 1,
             }}
           >
             <ImageViewer
               ref={imageViewerRef}
-              style={{
-                width: "100%",
-                height: "100%",
-              }}
+              style={{ width: "100%", height: "100%" }}
+              showOverlay={showOverlay}
+              currentTool={drawingTool}
             />
+
+            {/* Drawing Tools Panel */}
+            <div className="absolute top-4 right-4 bg-white/80 backdrop-blur-sm rounded-lg shadow-lg p-2">
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => handleToolSelect("arrow")}
+                  className={`p-2 rounded-lg transition-colors ${
+                    drawingTool === "arrow"
+                      ? "bg-blue-500 text-white"
+                      : "hover:bg-gray-200"
+                  }`}
+                  title="箭头工具"
+                >
+                  <ArrowRight className="w-5 h-5" />
+                </button>
+
+                <button
+                  onClick={() => handleToolSelect("circle")}
+                  className={`p-2 rounded-lg transition-colors ${
+                    drawingTool === "circle"
+                      ? "bg-blue-500 text-white"
+                      : "hover:bg-gray-200"
+                  }`}
+                  title="圆形工具"
+                >
+                  <Circle className="w-5 h-5" />
+                </button>
+
+                <div className="w-px h-6 bg-gray-300" />
+
+                <button
+                  onClick={handleToggleOverlay}
+                  className="p-2 rounded-lg hover:bg-gray-200 transition-colors"
+                  title={showOverlay ? "隐藏标注" : "显示标注"}
+                >
+                  {showOverlay ? (
+                    <EyeOff className="w-5 h-5" />
+                  ) : (
+                    <Eye className="w-5 h-5" />
+                  )}
+                </button>
+
+                <div className="w-px h-6 bg-gray-300" />
+
+                <button
+                  onClick={() => handleSaveImage(true)}
+                  className="p-2 rounded-lg hover:bg-gray-200 transition-colors"
+                  title="保存带标注的图像"
+                >
+                  <Download className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
             <ImageControls
               isExpanded={isExpanded}
               onToggleExpand={handleToggleExpand}

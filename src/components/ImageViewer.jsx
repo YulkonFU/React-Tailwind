@@ -1,12 +1,57 @@
-import React, { useEffect, useRef, forwardRef } from "react";
+import {
+  useEffect,
+  useRef,
+  forwardRef,
+  useState,
+  useImperativeHandle,
+} from "react";
 import * as PIXI from "pixi.js";
 import { imageDataService } from "../services/ImageDataService";
+import OverlayCanvas from "./OverlayCanvas";
 
 const ImageViewer = forwardRef((props, ref) => {
   const pixiContainerRef = useRef(null);
   const pixiAppRef = useRef(null);
   const spriteRef = useRef(null);
+  const overlayRef = useRef(null);
   const initializationTimeout = useRef(null);
+  const [showOverlay, setShowOverlay] = useState(true);
+
+  useImperativeHandle(ref, () => ({
+    saveImage: (options = { includeOverlay: true, filename: "image.png" }) => {
+      const canvas = document.createElement("canvas");
+      canvas.width = pixiAppRef.current.screen.width;
+      canvas.height = pixiAppRef.current.screen.height;
+      const ctx = canvas.getContext("2d");
+
+      // 绘制基础图像
+      ctx.drawImage(pixiAppRef.current.view, 0, 0);
+
+      // 如果需要包含 overlay
+      if (options.includeOverlay && showOverlay) {
+        ctx.drawImage(overlayRef.current.getCanvas(), 0, 0);
+      }
+
+      // 创建下载链接
+      const link = document.createElement("a");
+      link.download = options.filename;
+      link.href = canvas.toDataURL();
+      link.click();
+    },
+    setDrawingTool: (tool) => {
+      if (overlayRef.current) {
+        overlayRef.current.setTool(tool);
+      }
+    },
+    toggleOverlay: (show) => {
+      setShowOverlay(show);
+    },
+    clearOverlay: () => {
+      if (overlayRef.current) {
+        overlayRef.current.clearCanvas();
+      }
+    },
+  }));
 
   useEffect(() => {
     const initPixiApp = async () => {
@@ -122,7 +167,14 @@ const ImageViewer = forwardRef((props, ref) => {
         zIndex: 2,
         backgroundColor: "#000",
       }}
-    />
+    >
+      <OverlayCanvas
+        ref={overlayRef}
+        width={pixiContainerRef.current?.clientWidth}
+        height={pixiContainerRef.current?.clientHeight}
+        visible={showOverlay}
+      />
+    </div>
   );
 });
 
