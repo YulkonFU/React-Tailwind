@@ -1,165 +1,213 @@
 import { useRef, useEffect, useState, forwardRef, useImperativeHandle } from "react";
+import * as PIXI from "pixi.js";
 
-/**
- * OverlayCanvas 提供在画布上绘制箭头、圆形等功能。
- * 每次拖拽绘制时，仅显示当前图形预览，松开鼠标后将图形记录到数组中。
- */
 const OverlayCanvas = forwardRef(({ width, height, visible = true }, ref) => {
-  const canvasRef = useRef(null);
+  const pixiRef = useRef(null);
+  const [app, setApp] = useState(null);
 
-  // 存储所有已完成的图形
+  // shapes 用于记录已绘制完成的图形
   const [shapes, setShapes] = useState([]);
-
-  // 当前是否正在绘制
+  // 当前绘制中
   const [isDrawing, setIsDrawing] = useState(false);
-
-  // 绘制起点记录
+  // 起点
   const [startPoint, setStartPoint] = useState({ x: 0, y: 0 });
-
-  // 当前选中的工具，默认箭头
+  // 当前工具
   const [currentTool, setCurrentTool] = useState("arrow");
+  // 预览用 Graphics
+  const previewRef = useRef(null);
 
-  // 在挂载时初始化画笔
+  // 初始化 PixiJS (v8)
   useEffect(() => {
-    const canvas = canvasRef.current;
-    if (canvas) {
-      const ctx = canvas.getContext("2d");
-      // 保持红色
-      ctx.strokeStyle = "red";
-      ctx.lineWidth = 2;
-    }
-  }, []);
+    let pixiApp;
+    (async () => {
+      if (!pixiRef.current) return;
 
-  // shapes 更新后，立刻重绘，以显示最新图形
-  useEffect(() => {
-    if (!isDrawing) {
-      redrawAll(null); 
-    }
-  }, [shapes, isDrawing]);
+      // 1) 创建 Application 对象
+      pixiApp = new PIXI.Application();
+      // 2) 异步 init，传入配置
+      await pixiApp.init({
+        width,
+        height,
+        antialias: true,
+        transparent: true,
+        clearBeforeRender: true,
+        backgroundColor: 0x000000, // 可根据需要调整
+      });
+      // 3) 将创建好的 canvas 加入 DOM
+      if (pixiRef.current) {
+        pixiRef.current.appendChild(pixiApp.canvas);
+        setApp(pixiApp);
 
-  // 在父组件可调用的方法
+        // 开启舞台交互，注册事件
+        pixiApp.stage.interactive = true;
+        pixiApp.stage.on("pointerdown", handlePointerDown);
+        pixiApp.stage.on("pointermove", handlePointerMove);
+        pixiApp.stage.on("pointerup", handlePointerUp);
+        pixiApp.stage.on("pointerupoutside", handlePointerUp);
+
+        // 创建预览用图形
+        const previewGraphics = new PIXI.Graphics();
+        pixiApp.stage.addChild(previewGraphics);
+        previewRef.current = previewGraphics;
+      }
+    })();
+
+    // 卸载时清理
+    return () => {
+      if (pixiApp) {
+        pixiApp.destroy(true, true);
+        setApp(null);
+      }
+    };
+  }, [width, height]);
+
+  // 暴露给父组件的方法
   useImperativeHandle(ref, () => ({
-    getCanvas: () => canvasRef.current,
+    getCanvas: () => app?.canvas,
     clearCanvas: () => {
       setShapes([]);
-      const cvs = canvasRef.current;
-      cvs.getContext("2d").clearRect(0, 0, cvs.width, cvs.height);
+      if (!app) return;
+      app.stage.removeChildren(); // 会移除 preview，也要重新添加
+      const newPreview = new PIXI.Graphics();
+      app.stage.addChild(newPreview);
+      previewRef.current = newPreview;
     },
     setTool: (tool) => setCurrentTool(tool),
   }));
 
-  const drawArrow = (start, end, ctx) => {
+  useEffect(() => {
+    if (!isDrawing && app) {
+      redrawAll();
+    }
+  }, [shapes, app, isDrawing]);
+
+  function handlePointerDown(e) {
+    if (!visible) return;
+    setIsDrawing(true);
+    const { x, y } = e.data.getLocalPosition(app.stage);
+    setStartPoint({ x, y });
+  }
+
+  function handlePointerMove(e) {
+    if (!isDrawing || !visible) return;
+    const { x, y } = e.data.getLocalPosition(app.stage);
+    drawPreview({ x, y });
+  }
+
+  function handlePointerUp(e) {
+    if (!isDrawing || !visible) return;
+    setIsDrawing(false);
+    const { x, y } = e.data.getLocalPosition(app.stage);
+    const newShape = { tool: currentTool, start: startPoint, end: { x, y } };
+    setShapes((prev) => [...prev, newShape]);
+
+    // 清空预览
+    if (previewRef.current) {
+      previewRef.current.clear();
+    }
+  }
+
+  // 重绘所有已完成的图形
+  function redrawAll() {
+    if (!app) return;
+    app.stage.children.forEach((c) => {
+      if (c !== previewRef.current) c.clear?.();
+    });
+    shapes.forEach((shape) => {
+      const g = new PIXI.Graphics();
+      drawShape(g, shape);
+      app.stage.addChild(g);
+    });
+  }
+
+  // 每次鼠标移动时的实时预览
+  function drawPreview(currentEnd) {
+    if (!previewRef.current) return;
+    previewRef.current.clear();
+    drawShape(previewRef.current, {
+      tool: currentTool,
+      start: startPoint,
+      end: currentEnd,
+    });
+  }
+
+  // 根据 tool 绘制图形
+  function drawShape(g, { tool, start, end }) {
+    g.lineStyle(2, 0xff0000, 1);
+    switch (tool) {
+      case "arrow":
+        drawArrow(g, start, end);
+        break;
+      case "line":
+        drawLine(g, start, end);
+        break;
+      case "rect":
+        drawRect(g, start, end);
+        break;
+      case "circle":
+        drawCircle(g, start, end);
+        break;
+      default:
+        drawArrow(g, start, end);
+        break;
+    }
+  }
+
+  function drawLine(g, start, end) {
+    g.moveTo(start.x, start.y);
+    g.lineTo(end.x, end.y);
+  }
+
+  function drawArrow(g, start, end) {
     const headlen = 10;
     const dx = end.x - start.x;
     const dy = end.y - start.y;
     const angle = Math.atan2(dy, dx);
-
-    ctx.beginPath();
-    ctx.moveTo(start.x, start.y);
-    ctx.lineTo(end.x, end.y);
-    ctx.lineTo(
+    // 主干
+    g.moveTo(start.x, start.y);
+    g.lineTo(end.x, end.y);
+    // 箭头两侧
+    g.moveTo(end.x, end.y);
+    g.lineTo(
       end.x - headlen * Math.cos(angle - Math.PI / 6),
       end.y - headlen * Math.sin(angle - Math.PI / 6)
     );
-    ctx.moveTo(end.x, end.y);
-    ctx.lineTo(
+    g.moveTo(end.x, end.y);
+    g.lineTo(
       end.x - headlen * Math.cos(angle + Math.PI / 6),
       end.y - headlen * Math.sin(angle + Math.PI / 6)
     );
-    ctx.stroke();
-  };
+  }
 
-  const drawCircle = (start, end, ctx) => {
+  function drawRect(g, start, end) {
+    const x = Math.min(start.x, end.x);
+    const y = Math.min(start.y, end.y);
+    const w = Math.abs(end.x - start.x);
+    const h = Math.abs(end.y - start.y);
+    g.drawRect(x, y, w, h);
+  }
+
+  function drawCircle(g, start, end) {
     const radius = Math.sqrt(
-      Math.pow(end.x - start.x, 2) + Math.pow(end.y - start.y, 2)
+      (end.x - start.x) ** 2 + (end.y - start.y) ** 2
     );
-    ctx.beginPath();
-    ctx.arc(start.x, start.y, radius, 0, 2 * Math.PI);
-    ctx.stroke();
-  };
-
-  // 将单个图形数据绘制到 ctx
-  const drawShape = (shape, ctx) => {
-    ctx.strokeStyle = "red";
-    ctx.lineWidth = 2;
-    const { tool, start, end } = shape;
-    if (tool === "arrow") {
-      drawArrow(start, end, ctx);
-    } else if (tool === "circle") {
-      drawCircle(start, end, ctx);
-    }
-  };
-
-  // 重绘所有图形 + (可选)当前正在绘制的图形
-  const redrawAll = (tempEnd) => {
-    const cvs = canvasRef.current;
-    const ctx = cvs.getContext("2d");
-    ctx.clearRect(0, 0, cvs.width, cvs.height);
-
-    // 先绘制已完成的图形
-    shapes.forEach((shape) => drawShape(shape, ctx));
-
-    // 正在拖拽时，先绘制之前图形，然后再绘制当前预览图形
-    if (tempEnd && isDrawing) {
-      drawShape({ tool: currentTool, start: startPoint, end: tempEnd }, ctx);
-    }
-  };
-
-  // 鼠标按下
-  const handleMouseDown = (e) => {
-    const rect = canvasRef.current.getBoundingClientRect();
-    setStartPoint({
-      x: e.clientX - rect.left,
-      y: e.clientY - rect.top,
-    });
-    setIsDrawing(true);
-  };
-
-  // 鼠标移动 -> 实时预览
-  const handleMouseMove = (e) => {
-    if (!isDrawing) return;
-    const rect = canvasRef.current.getBoundingClientRect();
-    const currentPoint = {
-      x: e.clientX - rect.left,
-      y: e.clientY - rect.top,
-    };
-    redrawAll(currentPoint);
-  };
-
-  // 鼠标抬起 -> 完成绘制
-  const handleMouseUp = (e) => {
-    if (!isDrawing) return;
-    const rect = canvasRef.current.getBoundingClientRect();
-    const endPoint = {
-      x: e.clientX - rect.left,
-      y: e.clientY - rect.top,
-    };
-    setShapes((prev) => [
-      ...prev,
-      { tool: currentTool, start: startPoint, end: endPoint },
-    ]);
-    setIsDrawing(false);
-    // 注意：此时立刻调用 redrawAll 只能重绘旧 shapes，
-    // shapes 数组在下一次渲染才更新，所以这里交给 useEffect 监听 shapes 自动重绘
-  };
+    g.drawCircle(start.x, start.y, radius);
+  }
 
   return (
-    <canvas
-      ref={canvasRef}
-      width={width}
-      height={height}
+    <div
+      ref={pixiRef}
       style={{
         position: "absolute",
         top: 0,
         left: 0,
+        width,
+        height,
         pointerEvents: visible ? "auto" : "none",
         opacity: visible ? 1 : 0,
+        overflow: "hidden",
         cursor: isDrawing ? "crosshair" : "default",
       }}
-      onMouseDown={handleMouseDown}
-      onMouseMove={handleMouseMove}
-      onMouseUp={handleMouseUp}
-      onMouseLeave={handleMouseUp}
     />
   );
 });
