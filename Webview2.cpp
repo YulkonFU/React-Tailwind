@@ -2,10 +2,13 @@
 #include <wrl.h>
 #include <wil/com.h>
 #include <WebView2.h>
+#include <WebView2EnvironmentOptions.h>
 #include <string>
 #include <vector>
 #include <atlenc.h>
 #include <wincrypt.h>
+#include <ShellScalingApi.h>
+#pragma comment(lib, "Shcore.lib")
 
 // 添加库链接
 #pragma comment(lib, "crypt32.lib")
@@ -21,6 +24,8 @@ struct ImageData {
     std::vector<BYTE> data;
     UINT width;
     UINT height;
+
+    ImageData() : width(0), height(0) {} // Initialize width and height
 };
 
 // ImageHandler 类定义
@@ -30,6 +35,7 @@ class ImageHandler : public Microsoft::WRL::RuntimeClass<
 private:
     ImageData imageData;
 
+    // 将 std::string 转换为 std::wstring
     std::wstring ConvertToWString(const std::string& str) {
         if (str.empty()) return std::wstring();
         int size = MultiByteToWideChar(CP_UTF8, 0, &str[0], (int)str.size(), NULL, 0);
@@ -38,12 +44,14 @@ private:
         return result;
     }
 
+    // 初始化图像数据
     void InitializeImageData() {
         imageData.width = 640;
         imageData.height = 480;
         UINT dataSize = imageData.width * imageData.height * 4;  // RGBA
         imageData.data.resize(dataSize);
 
+        // 生成渐变图像
         for (UINT y = 0; y < imageData.height; y++) {
             for (UINT x = 0; x < imageData.width; x++) {
                 UINT index = (y * imageData.width + x) * 4;
@@ -144,6 +152,7 @@ public:
         return E_NOTIMPL;
     }
 
+    // 获取图像数据
     STDMETHOD(GetIDsOfNames)(REFIID riid, LPOLESTR* rgszNames, UINT cNames,
         LCID lcid, DISPID* rgDispId) override {
         if (!rgszNames || !rgDispId) return E_INVALIDARG;
@@ -156,6 +165,7 @@ public:
         return DISP_E_UNKNOWNNAME;
     }
 
+    // 实现 getImageData 方法
     STDMETHOD(Invoke)(DISPID dispIdMember, REFIID riid, LCID lcid,
         WORD wFlags, DISPPARAMS* pDispParams, VARIANT* pVarResult,
         EXCEPINFO* pExcepInfo, UINT* puArgErr) override
@@ -187,9 +197,13 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
     return DefWindowProc(hwnd, uMsg, wParam, lParam);
 }
 
+// 初始化WebView2
 void InitializeWebView2()
 {
-    CreateCoreWebView2EnvironmentWithOptions(nullptr, nullptr, nullptr,
+    // 创建 WebView2 环境选项
+    auto options = Microsoft::WRL::Make<CoreWebView2EnvironmentOptions>();
+
+    CreateCoreWebView2EnvironmentWithOptions(nullptr, nullptr, options.Get(),
         Callback<ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler>(
             [](HRESULT result, ICoreWebView2Environment* env) -> HRESULT {
                 env->CreateCoreWebView2Controller(hWnd,
@@ -200,12 +214,18 @@ void InitializeWebView2()
                                 webViewController->get_CoreWebView2(&webViewWindow);
 
                                 // 配置WebView2设置
-                                ICoreWebView2Settings* Settings;
-                                webViewWindow->get_Settings(&Settings);
-                                Settings->put_IsScriptEnabled(TRUE);
-                                Settings->put_AreDefaultScriptDialogsEnabled(TRUE);
-                                Settings->put_IsWebMessageEnabled(TRUE);
-                                Settings->put_AreDevToolsEnabled(TRUE);
+                                Microsoft::WRL::ComPtr<ICoreWebView2Settings> settings;
+                                webViewWindow->get_Settings(&settings);
+                                settings->put_IsScriptEnabled(TRUE);
+                                settings->put_AreDefaultScriptDialogsEnabled(TRUE);
+                                settings->put_IsWebMessageEnabled(TRUE);
+                                settings->put_AreDevToolsEnabled(TRUE);
+
+                                // 配置高级设置
+                                Microsoft::WRL::ComPtr<ICoreWebView2Settings6> settings6;
+                                if (SUCCEEDED(settings->QueryInterface(IID_PPV_ARGS(&settings6)))) {
+                                    settings6->put_IsPinchZoomEnabled(FALSE);
+                                }
 
                                 // 注册图像处理器
                                 ComPtr<IDispatch> imageHandler = Microsoft::WRL::Make<ImageHandler>();
@@ -229,8 +249,16 @@ void InitializeWebView2()
             }).Get());
 }
 
+// 创建窗口
+// 修改主函数，添加 DPI 感知
 int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR, int nCmdShow)
 {
+    // 设置 DPI 感知
+    SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+
+    // 初始化 COM
+    CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+
     const wchar_t CLASS_NAME[] = L"XRay Viewer Window";
 
     WNDCLASS wc = {};
@@ -241,12 +269,19 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR, int nCmdShow)
 
     RegisterClass(&wc);
 
+    // 获取当前显示器的 DPI
+    UINT dpi = GetDpiForSystem();
+    float scale = static_cast<float>(dpi) / 96.0f;
+
+    // 创建窗口时考虑 DPI 缩放
     hWnd = CreateWindowEx(
         0,
         CLASS_NAME,
         L"XRay Image Viewer",
         WS_OVERLAPPEDWINDOW,
-        CW_USEDEFAULT, CW_USEDEFAULT, 1024, 768,
+        CW_USEDEFAULT, CW_USEDEFAULT,
+        static_cast<int>(1024 * scale),
+        static_cast<int>(768 * scale),
         nullptr,
         nullptr,
         hInstance,
@@ -267,6 +302,9 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR, int nCmdShow)
         TranslateMessage(&msg);
         DispatchMessage(&msg);
     }
+
+    // 清理 COM
+    CoUninitialize();
 
     return 0;
 }
