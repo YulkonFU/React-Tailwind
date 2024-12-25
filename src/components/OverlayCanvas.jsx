@@ -1,4 +1,10 @@
-import { useRef, useEffect, useState, forwardRef, useImperativeHandle } from "react";
+import {
+  useRef,
+  useEffect,
+  useState,
+  forwardRef,
+  useImperativeHandle,
+} from "react";
 
 /**
  * OverlayCanvas 提供在画布上绘制箭头、圆形等功能。
@@ -33,7 +39,7 @@ const OverlayCanvas = forwardRef(({ width, height, visible = true }, ref) => {
   // shapes 更新后，立刻重绘，以显示最新图形
   useEffect(() => {
     if (!isDrawing) {
-      redrawAll(null); 
+      redrawAll(null);
     }
   }, [shapes, isDrawing]);
 
@@ -48,6 +54,23 @@ const OverlayCanvas = forwardRef(({ width, height, visible = true }, ref) => {
     setTool: (tool) => setCurrentTool(tool),
   }));
 
+  // 绘制直线
+  const drawLine = (start, end, ctx) => {
+    ctx.beginPath();
+    ctx.moveTo(start.x, start.y);
+    ctx.lineTo(end.x, end.y);
+    ctx.stroke();
+  };
+
+  // 绘制矩形
+  const drawRect = (start, end, ctx) => {
+    const width = end.x - start.x;
+    const height = end.y - start.y;
+    ctx.beginPath();
+    ctx.strokeRect(start.x, start.y, width, height);
+  };
+
+  // 绘制箭头
   const drawArrow = (start, end, ctx) => {
     const headlen = 10;
     const dx = end.x - start.x;
@@ -69,6 +92,7 @@ const OverlayCanvas = forwardRef(({ width, height, visible = true }, ref) => {
     ctx.stroke();
   };
 
+  // 绘制圆形
   const drawCircle = (start, end, ctx) => {
     const radius = Math.sqrt(
       Math.pow(end.x - start.x, 2) + Math.pow(end.y - start.y, 2)
@@ -83,10 +107,21 @@ const OverlayCanvas = forwardRef(({ width, height, visible = true }, ref) => {
     ctx.strokeStyle = "red";
     ctx.lineWidth = 2;
     const { tool, start, end } = shape;
-    if (tool === "arrow") {
-      drawArrow(start, end, ctx);
-    } else if (tool === "circle") {
-      drawCircle(start, end, ctx);
+    switch (tool) {
+      case "line":
+        drawLine(start, end, ctx);
+        break;
+      case "arrow":
+        drawArrow(start, end, ctx);
+        break;
+      case "rect":
+        drawRect(start, end, ctx);
+        break;
+      case "circle":
+        drawCircle(start, end, ctx);
+        break;
+      default:
+        break;
     }
   };
 
