@@ -25,6 +25,11 @@ const OverlayCanvas = forwardRef(({ width, height, visible = true }, ref) => {
   // 当前选中的工具，默认箭头
   const [currentTool, setCurrentTool] = useState("arrow");
 
+  const [textInput, setTextInput] = useState("");
+  const [showTextInput, setShowTextInput] = useState(false);
+  const [textPosition, setTextPosition] = useState({ x: 0, y: 0 });
+  const textInputRef = useRef(null);
+
   // 在挂载时初始化画笔
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -102,11 +107,18 @@ const OverlayCanvas = forwardRef(({ width, height, visible = true }, ref) => {
     ctx.stroke();
   };
 
+  // 绘制文本
+  const drawText = (position, text, ctx) => {
+    ctx.font = "16px Arial";
+    ctx.fillStyle = "red";
+    ctx.fillText(text, position.x, position.y);
+  };
+
   // 将单个图形数据绘制到 ctx
   const drawShape = (shape, ctx) => {
     ctx.strokeStyle = "red";
     ctx.lineWidth = 2;
-    const { tool, start, end } = shape;
+    const { tool, start, end, text } = shape;
     switch (tool) {
       case "line":
         drawLine(start, end, ctx);
@@ -119,6 +131,9 @@ const OverlayCanvas = forwardRef(({ width, height, visible = true }, ref) => {
         break;
       case "circle":
         drawCircle(start, end, ctx);
+        break;
+      case "text":
+        drawText(start, text, ctx);
         break;
       default:
         break;
@@ -142,11 +157,28 @@ const OverlayCanvas = forwardRef(({ width, height, visible = true }, ref) => {
 
   // 鼠标按下
   const handleMouseDown = (e) => {
+    if (!visible) return;
+
     const rect = canvasRef.current.getBoundingClientRect();
-    setStartPoint({
+    const point = {
       x: e.clientX - rect.left,
       y: e.clientY - rect.top,
-    });
+    };
+
+    if (currentTool === "text") {
+      // 如果当前有未保存的文本，先保存
+      if (showTextInput && textInput.trim()) {
+        saveCurrentText();
+      }
+      // 开启新的文本输入
+      setTextPosition(point);
+      setShowTextInput(true);
+      setTextInput("");
+      setTimeout(() => textInputRef.current?.focus(), 0);
+      return;
+    }
+
+    setStartPoint(point);
     setIsDrawing(true);
   };
 
@@ -178,24 +210,103 @@ const OverlayCanvas = forwardRef(({ width, height, visible = true }, ref) => {
     // shapes 数组在下一次渲染才更新，所以这里交给 useEffect 监听 shapes 自动重绘
   };
 
+  // 保存当前文本
+  const saveCurrentText = () => {
+    if (textInput.trim()) {
+      setShapes((prev) => [
+        ...prev,
+        {
+          tool: "text",
+          start: textPosition,
+          text: textInput,
+        },
+      ]);
+    }
+    setTextInput("");
+    setShowTextInput(false);
+  };
+
+  // 处理点击事件
+  const handleCanvasClick = (e) => {
+    if (!visible || currentTool !== "text") return;
+
+    const rect = canvasRef.current.getBoundingClientRect();
+    const point = {
+      x: e.clientX - rect.left,
+      y: e.clientY - rect.top,
+    };
+
+    // 如果已有文本框，先保存
+    if (showTextInput && textInput.trim()) {
+      saveCurrentText();
+    }
+
+    // 创建新文本框
+    setTextPosition(point);
+    setShowTextInput(true);
+    setTimeout(() => {
+      if (textInputRef.current) {
+        textInputRef.current.focus();
+      }
+    }, 0);
+  };
+
+  // 处理文本提交
+  const handleTextSubmit = (e) => {
+    if (e.key === "Enter") {
+      saveCurrentText();
+    }
+  };
+
+  // 处理文本失焦
+  const handleTextBlur = () => {
+    saveCurrentText();
+  };
+
   return (
-    <canvas
-      ref={canvasRef}
-      width={width}
-      height={height}
-      style={{
-        position: "absolute",
-        top: 0,
-        left: 0,
-        pointerEvents: visible ? "auto" : "none",
-        opacity: visible ? 1 : 0,
-        cursor: isDrawing ? "crosshair" : "default",
-      }}
-      onMouseDown={handleMouseDown}
-      onMouseMove={handleMouseMove}
-      onMouseUp={handleMouseUp}
-      onMouseLeave={handleMouseUp}
-    />
+    <>
+      <canvas
+        ref={canvasRef}
+        width={width}
+        height={height}
+        style={{
+          position: "absolute",
+          top: 0,
+          left: 0,
+          pointerEvents: visible ? "auto" : "none",
+          opacity: visible ? 1 : 0,
+          cursor:
+            currentTool === "text"
+              ? "text"
+              : isDrawing
+              ? "crosshair"
+              : "default",
+        }}
+        onClick={handleCanvasClick}
+        onMouseDown={(e) => currentTool !== "text" && handleMouseDown(e)}
+        onMouseMove={(e) => currentTool !== "text" && handleMouseMove(e)}
+        onMouseUp={(e) => currentTool !== "text" && handleMouseUp(e)}
+        onMouseLeave={(e) => currentTool !== "text" && handleMouseUp(e)}
+      />
+      {showTextInput && (
+        <input
+          ref={textInputRef}
+          type="text"
+          value={textInput}
+          onChange={(e) => setTextInput(e.target.value)}
+          onKeyDown={handleTextSubmit}
+          onBlur={handleTextBlur}
+          className="absolute bg-transparent border border-gray-300 px-1 outline-none text-red-500"
+          style={{
+            left: textPosition.x + "px",
+            top: textPosition.y - 10 + "px",
+            font: "16px Arial",
+            minWidth: "100px",
+          }}
+          autoFocus
+        />
+      )}
+    </>
   );
 });
 

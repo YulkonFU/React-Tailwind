@@ -6,6 +6,7 @@ import {
   Eraser,
   Eye,
   EyeOff,
+  Type,
 } from "lucide-react";
 import PropTypes from "prop-types";
 
@@ -72,6 +73,18 @@ const DrawingToolbar = ({
           title="圆形工具"
         >
           <Circle className="w-5 h-5" />
+        </button>
+
+        <button
+          onClick={() => onToolSelect("text")}
+          className={`p-2 rounded-lg transition-colors ${
+            currentTool === "text"
+              ? "bg-blue-500 text-white"
+              : "hover:bg-gray-200"
+          }`}
+          title="文本工具"
+        >
+          <Type className="w-5 h-5" />
         </button>
 
         <div className="w-full h-px bg-gray-300" />
