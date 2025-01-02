@@ -5,11 +5,6 @@ import {
   Grid,
   Filter,
   MessageSquare,
-  Download,
-  Circle,
-  ArrowRight,
-  Eye,
-  EyeOff,
   Pencil,
 } from "lucide-react";
 import FileMenu from "../components/menu/FileMenu";
@@ -35,6 +30,20 @@ const XactLayout = () => {
   const [drawingTool, setDrawingTool] = useState("arrow"); // 'arrow' | 'circle'
   const [showOverlay, setShowOverlay] = useState(true);
   const [showDrawingTools, setShowDrawingTools] = useState(false);
+  const [isGridView, setIsGridView] = useState(false);
+  const [activeGridIndex, setActiveGridIndex] = useState(0);
+
+  // 添加切换Grid布局函数
+  const toggleGridView = () => {
+    setIsGridView(!isGridView);
+    setActiveGridIndex(0); // Reset active grid when toggling
+  };
+
+  // 添加处理双击事件函数
+  const handleGridDoubleClick = (index) => {
+    setIsGridView(false);
+    setActiveGridIndex(index);
+  };
 
   // 处理加载图片
   const handleLoadImage = () => {
@@ -170,8 +179,11 @@ const XactLayout = () => {
         >
           <Save className="w-6 h-6" />
         </button>
-        <button className="p-2 text-black hover:bg-gray-700 rounded">
-          <Grid className="w-6 h-6" />
+        <button
+          className="p-2 text-black hover:bg-gray-700 rounded"
+          onClick={toggleGridView}
+        >
+          <Grid className={`w-6 h-6 ${isGridView ? "text-blue-500" : ""}`} />
         </button>
         <button className="p-2 text-black hover:bg-gray-700 rounded">
           <Filter className="w-6 h-6" />
@@ -274,12 +286,32 @@ const XactLayout = () => {
               zIndex: 1,
             }}
           >
-            <ImageViewer
-              ref={imageViewerRef}
-              style={{ width: "100%", height: "100%" }}
-              showOverlay={showOverlay}
-              currentTool={drawingTool}
-            />
+            {isGridView ? (
+              <div className="grid grid-cols-2 grid-rows-2 gap-1 w-full h-full">
+                {[0, 1, 2, 3].map((index) => (
+                  <div
+                    key={index}
+                    className="relative bg-black"
+                    onDoubleClick={() => handleGridDoubleClick(index)}
+                    style={{ cursor: "pointer" }}
+                  >
+                    <ImageViewer
+                      ref={index === 0 ? imageViewerRef : null}
+                      style={{ width: "100%", height: "100%" }}
+                      showOverlay={showOverlay}
+                      currentTool={drawingTool}
+                    />
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <ImageViewer
+                ref={imageViewerRef}
+                style={{ width: "100%", height: "100%" }}
+                showOverlay={showOverlay}
+                currentTool={drawingTool}
+              />
+            )}
 
             <ImageControls
               isExpanded={isExpanded}
@@ -298,15 +330,7 @@ const XactLayout = () => {
               onReset={() => {
                 if (spriteRef.current) {
                   spriteRef.current.rotation = 0;
-                  const initialScale = spriteRef.current.initialScale || 1;
-                  spriteRef.current.scale.set(initialScale);
-                  if (imageViewerRef.current?.pixiAppRef.current) {
-                    const app = imageViewerRef.current.pixiAppRef.current;
-                    spriteRef.current.position.set(
-                      app.screen.width / 2,
-                      app.screen.height / 2
-                    );
-                  }
+                  spriteRef.current.scale.set(1);
                 }
               }}
             />
