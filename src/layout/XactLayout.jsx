@@ -19,7 +19,6 @@ import XrayControl from "../components/XrayControl";
 import ManipulatorControl from "../components/ManipulatorControl";
 import DetectorControl from "../components/DetectorControl";
 import DrawingToolbar from "../components/DrawingToolbar";
-import { MenuIcons } from "../components/menu/MenuIcons";
 
 const XactLayout = () => {
   const [activeMenu, setActiveMenu] = useState(null);
@@ -33,6 +32,15 @@ const XactLayout = () => {
   const [showDrawingTools, setShowDrawingTools] = useState(false);
   const [isGridView, setIsGridView] = useState(false);
   const [activeGridIndex, setActiveGridIndex] = useState(0);
+
+  const menuItems = [
+    { key: "file", title: "File" },
+    { key: "edit", title: "Edit" },
+    { key: "view", title: "View" },
+    { key: "modules", title: "Modules" },
+    { key: "setup", title: "Setup" },
+    { key: "help", title: "Help" },
+  ];
 
   // 添加切换Grid布局函数
   const toggleGridView = () => {
@@ -221,25 +229,16 @@ const XactLayout = () => {
         {/* Top Menu Bar */}
         <div className="bg-white border-b">
           {/* Menu Icons */}
-          <div className="h-12 flex items-center px-4 gap-4">
-            {Object.entries(MenuIcons).map(([key, { icon: Icon, title }]) => (
+          <div className="h-12 flex items-center px-4">
+            {menuItems.map(({ key, title }) => (
               <button
                 key={key}
-                className={`p-2 rounded-lg transition-all duration-200 relative group ${
-                  activeMenu === key ? "bg-gray-100" : "hover:bg-gray-50"
+                className={`px-4 py-2 text-sm hover:bg-gray-100 transition-colors ${
+                  activeMenu === key ? "bg-gray-100" : ""
                 }`}
                 onClick={() => toggleMenu(key)}
               >
-                <Icon className="w-5 h-5" />
-                {/* Tooltip */}
-                <span
-                  className="absolute -bottom-8 left-1/2 -translate-x-1/2 
-                             px-2 py-1 text-xs bg-gray-800 text-white rounded 
-                             opacity-0 group-hover:opacity-100 transition-opacity
-                             whitespace-nowrap"
-                >
-                  {title}
-                </span>
+                {title}
               </button>
             ))}
           </div>
@@ -247,10 +246,12 @@ const XactLayout = () => {
           {/* Menu Content */}
           <div
             className={`overflow-hidden transition-all duration-300 ${
-              activeMenu ? "h-[200px]" : "h-0"
+              activeMenu ? "h-[120px]" : "h-0" // 减小高度
             }`}
           >
-            <div className="p-4 bg-white shadow-lg">
+            <div className="bg-white">
+              {" "}
+              {/* 移除 p-4 和 shadow-lg */}
               {activeMenu === "file" && <FileMenu />}
               {activeMenu === "edit" && <EditMenu />}
               {activeMenu === "view" && <ViewMenu />}
