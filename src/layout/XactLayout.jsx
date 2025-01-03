@@ -173,7 +173,7 @@ const XactLayout = () => {
   };
 
   return (
-    <div className="flex h-screen bg-gray-100">
+    <div className="flex flex-col h-screen">
       {/* Main Content Area */}
       <div className="ml-16 flex-1 flex flex-col">
         {/* 绘图工具栏 */}
