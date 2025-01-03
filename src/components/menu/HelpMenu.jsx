@@ -4,7 +4,6 @@ const HelpMenu = () => {
   return (
     <div className="flex gap-8">
       <div className="space-y-4">
-        <h3 className="text-sm font-semibold text-gray-600">Help</h3>
         <div className="flex gap-4">
           <button className="flex flex-col items-center gap-1 p-2 rounded hover:bg-gray-100">
             <BookOpen className="w-5 h-5" />

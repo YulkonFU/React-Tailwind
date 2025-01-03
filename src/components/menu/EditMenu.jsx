@@ -4,7 +4,6 @@ const EditMenu = () => {
   return (
     <div className="flex gap-8">
       <div className="space-y-4">
-        <h3 className="text-sm font-semibold text-gray-600">Clipboard</h3>
         <div className="flex gap-4">
           <button className="flex flex-col items-center gap-1 p-2 rounded hover:bg-gray-100">
             <ClipboardCopy className="w-5 h-5" />
@@ -22,7 +21,6 @@ const EditMenu = () => {
       </div>
 
       <div className="space-y-4">
-        <h3 className="text-sm font-semibold text-gray-600">Undo</h3>
         <div className="flex gap-4">
           <button className="flex flex-col items-center gap-1 p-2 rounded hover:bg-gray-100">
             <Undo2 className="w-5 h-5" />
