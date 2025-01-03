@@ -1,10 +1,25 @@
+import { BookOpen, HeadphonesIcon, Info } from 'lucide-react';
 
 const HelpMenu = () => {
   return (
-    <div className="absolute bg-white shadow-lg rounded p-2 mt-20 z-50">
-      <button className="block px-4 py-2 text-sm hover:bg-gray-100">Documentation</button>
-      <button className="block px-4 py-2 text-sm hover:bg-gray-100">Support</button>
-      <button className="block px-4 py-2 text-sm hover:bg-gray-100">About</button>
+    <div className="flex gap-8">
+      <div className="space-y-4">
+        <h3 className="text-sm font-semibold text-gray-600">Help</h3>
+        <div className="flex gap-4">
+          <button className="flex flex-col items-center gap-1 p-2 rounded hover:bg-gray-100">
+            <BookOpen className="w-5 h-5" />
+            <span className="text-xs">Documentation</span>
+          </button>
+          <button className="flex flex-col items-center gap-1 p-2 rounded hover:bg-gray-100">
+            <HeadphonesIcon className="w-5 h-5" />
+            <span className="text-xs">Support</span>
+          </button>
+          <button className="flex flex-col items-center gap-1 p-2 rounded hover:bg-gray-100">
+            <Info className="w-5 h-5" />
+            <span className="text-xs">About</span>
+          </button>
+        </div>
+      </div>
     </div>
   );
 };

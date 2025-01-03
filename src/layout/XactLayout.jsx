@@ -19,6 +19,7 @@ import XrayControl from "../components/XrayControl";
 import ManipulatorControl from "../components/ManipulatorControl";
 import DetectorControl from "../components/DetectorControl";
 import DrawingToolbar from "../components/DrawingToolbar";
+import { MenuIcons } from "../components/menu/MenuIcons";
 
 const XactLayout = () => {
   const [activeMenu, setActiveMenu] = useState(null);
@@ -218,54 +219,46 @@ const XactLayout = () => {
         )}
 
         {/* Top Menu Bar */}
-        <div
-          className="bg-white h-12 border-b flex items-center px-4 gap-4 relative"
-          ref={menuRef}
-        >
-          <button
-            className="px-3 py-1 text-sm hover:bg-gray-200 rounded"
-            onClick={() => toggleMenu("file")}
-          >
-            File
-          </button>
-          <button
-            className="px-3 py-1 text-sm hover:bg-gray-200 rounded"
-            onClick={() => toggleMenu("edit")}
-          >
-            Edit
-          </button>
-          <button
-            className="px-3 py-1 text-sm hover:bg-gray-200 rounded"
-            onClick={() => toggleMenu("view")}
-          >
-            View
-          </button>
-          <button
-            className="px-3 py-1 text-sm hover:bg-gray-200 rounded"
-            onClick={() => toggleMenu("modules")}
-          >
-            Modules
-          </button>
-          <button
-            className="px-3 py-1 text-sm hover:bg-gray-200 rounded"
-            onClick={() => toggleMenu("setup")}
-          >
-            Setup
-          </button>
-          <button
-            className="px-3 py-1 text-sm hover:bg-gray-200 rounded"
-            onClick={() => toggleMenu("help")}
-          >
-            Help
-          </button>
+        <div className="bg-white border-b">
+          {/* Menu Icons */}
+          <div className="h-12 flex items-center px-4 gap-4">
+            {Object.entries(MenuIcons).map(([key, { icon: Icon, title }]) => (
+              <button
+                key={key}
+                className={`p-2 rounded-lg transition-all duration-200 relative group ${
+                  activeMenu === key ? "bg-gray-100" : "hover:bg-gray-50"
+                }`}
+                onClick={() => toggleMenu(key)}
+              >
+                <Icon className="w-5 h-5" />
+                {/* Tooltip */}
+                <span
+                  className="absolute -bottom-8 left-1/2 -translate-x-1/2 
+                             px-2 py-1 text-xs bg-gray-800 text-white rounded 
+                             opacity-0 group-hover:opacity-100 transition-opacity
+                             whitespace-nowrap"
+                >
+                  {title}
+                </span>
+              </button>
+            ))}
+          </div>
 
-          {/* 下拉菜单 */}
-          {activeMenu === "file" && <FileMenu />}
-          {activeMenu === "edit" && <EditMenu />}
-          {activeMenu === "view" && <ViewMenu />}
-          {activeMenu === "modules" && <ModulesMenu />}
-          {activeMenu === "setup" && <SetupMenu />}
-          {activeMenu === "help" && <HelpMenu />}
+          {/* Menu Content */}
+          <div
+            className={`overflow-hidden transition-all duration-300 ${
+              activeMenu ? "h-[200px]" : "h-0"
+            }`}
+          >
+            <div className="p-4 bg-white shadow-lg">
+              {activeMenu === "file" && <FileMenu />}
+              {activeMenu === "edit" && <EditMenu />}
+              {activeMenu === "view" && <ViewMenu />}
+              {activeMenu === "modules" && <ModulesMenu />}
+              {activeMenu === "setup" && <SetupMenu />}
+              {activeMenu === "help" && <HelpMenu />}
+            </div>
+          </div>
         </div>
 
         {/* Main Workspace */}

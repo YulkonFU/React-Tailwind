@@ -1,11 +1,29 @@
+import { Maximize2, Grid, Monitor, RotateCcw } from 'lucide-react';
 
 const ViewMenu = () => {
   return (
-    <div className="absolute bg-white shadow-lg rounded p-2 mt-20 z-50">
-      <button className="block px-4 py-2 text-sm hover:bg-gray-100">Single View</button>
-      <button className="block px-4 py-2 text-sm hover:bg-gray-100">Quad View</button>
-      <button className="block px-4 py-2 text-sm hover:bg-gray-100">Fullscreen</button>
-      <button className="block px-4 py-2 text-sm hover:bg-gray-100">Restore</button>
+    <div className="flex gap-8">
+      <div className="space-y-4">
+        <h3 className="text-sm font-semibold text-gray-600">View Mode</h3>
+        <div className="flex gap-4">
+          <button className="flex flex-col items-center gap-1 p-2 rounded hover:bg-gray-100">
+            <Monitor className="w-5 h-5" />
+            <span className="text-xs">Single View</span>
+          </button>
+          <button className="flex flex-col items-center gap-1 p-2 rounded hover:bg-gray-100">
+            <Grid className="w-5 h-5" />
+            <span className="text-xs">Quad View</span>
+          </button>
+          <button className="flex flex-col items-center gap-1 p-2 rounded hover:bg-gray-100">
+            <Maximize2 className="w-5 h-5" />
+            <span className="text-xs">Fullscreen</span>
+          </button>
+          <button className="flex flex-col items-center gap-1 p-2 rounded hover:bg-gray-100">
+            <RotateCcw className="w-5 h-5" />
+            <span className="text-xs">Restore</span>
+          </button>
+        </div>
+      </div>
     </div>
   );
 };
