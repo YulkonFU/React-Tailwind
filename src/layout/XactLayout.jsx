@@ -174,47 +174,8 @@ const XactLayout = () => {
 
   return (
     <div className="flex h-screen bg-gray-100">
-      {/* Left Sidebar - Tool Buttons */}
-      <div className="w-16 bg-gray-800 p-2 flex flex-col gap-4">
-        <button
-          className="p-2 text-black hover:bg-gray-700 rounded"
-          onClick={handleLoadImage}
-        >
-          <ImageIcon className="w-6 h-6" />
-        </button>
-        <button
-          className="p-2 text-black hover:bg-gray-700 rounded"
-          onClick={handleSaveImage}
-        >
-          <Save className="w-6 h-6" />
-        </button>
-        <button
-          className="p-2 text-black hover:bg-gray-700 rounded"
-          onClick={toggleGridView}
-        >
-          <Grid className={`w-6 h-6 ${isGridView ? "text-blue-500" : ""}`} />
-        </button>
-        <button className="p-2 text-black hover:bg-gray-700 rounded">
-          <Filter className="w-6 h-6" />
-        </button>
-        <button className="p-2 text-black hover:bg-gray-700 rounded">
-          <MessageSquare className="w-6 h-6" />
-        </button>
-        <button
-          onClick={() => setShowDrawingTools(!showDrawingTools)}
-          className={`p-2 rounded-lg transition-colors ${
-            showDrawingTools
-              ? "bg-blue-500 text-white"
-              : "bg-white hover:bg-gray-100"
-          }`}
-          title="绘图工具"
-        >
-          <Pencil className="w-5 h-5" />
-        </button>
-      </div>
-
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col">
+      <div className="ml-16 flex-1 flex flex-col">
         {/* 绘图工具栏 */}
         {showDrawingTools && (
           <DrawingToolbar
@@ -246,7 +207,7 @@ const XactLayout = () => {
           {/* Menu Content */}
           <div
             className={`overflow-hidden transition-all duration-300 ${
-              activeMenu ? "h-[120px]" : "h-0" // 减小高度
+              activeMenu ? "h-[80px]" : "h-0" // 减小高度
             }`}
           >
             <div className="bg-white">
@@ -264,18 +225,60 @@ const XactLayout = () => {
 
         {/* Main Workspace */}
         <div
-          className={`flex-1 flex flex-col lg:flex-row ${
-            isExpanded ? "fixed inset-0 z-40" : ""
-          }`}
+          className={`flex-1 flex ${isExpanded ? "fixed inset-0 z-40" : ""}`}
         >
+          {/* Left Sidebar - Tool Buttons */}
+          <div className="w-16 bg-gray-800 p-2 flex flex-col justify-between items-center">
+            {/* 上部分按钮组 */}
+            <div className="flex flex-col gap-4">
+              <button
+                className="p-2 text-black hover:bg-gray-700 rounded"
+                onClick={handleLoadImage}
+              >
+                <ImageIcon className="w-6 h-6" />
+              </button>
+              <button
+                className="p-2 text-black hover:bg-gray-700 rounded"
+                onClick={handleSaveImage}
+              >
+                <Save className="w-6 h-6" />
+              </button>
+              <button
+                className="p-2 text-black hover:bg-gray-700 rounded"
+                onClick={toggleGridView}
+              >
+                <Grid
+                  className={`w-6 h-6 ${isGridView ? "text-blue-500" : ""}`}
+                />
+              </button>
+              <button className="p-2 text-black hover:bg-gray-700 rounded">
+                <Filter className="w-6 h-6" />
+              </button>
+              <button
+                onClick={() => setShowDrawingTools(!showDrawingTools)}
+                className={`p-2 rounded transition-colors ${
+                  showDrawingTools
+                    ? "bg-blue-500 text-black"
+                    : "text-black hover:bg-gray-700"
+                }`}
+                title="绘图工具"
+              >
+                <Pencil className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* 底部按钮组 */}
+            <div className="flex flex-col gap-4">{/* 预留底部按钮位置 */}</div>
+          </div>
+
           {/* Image View Area */}
           <div
             className={`flex-1 bg-black relative ${
               isExpanded ? "w-full h-full" : ""
             }`}
             style={{
-              width: "700px",
-              height: "700px",
+              width: "800px",
+              height: "800px",
               position: "relative",
               zIndex: 1,
             }}
