@@ -1,8 +1,13 @@
 import { useState, useEffect, useCallback } from "react";
-import PropTypes from "prop-types";
-import { Radiation, AlertTriangle, ChevronUp, ChevronDown } from "lucide-react";
+import { 
+  Radiation, 
+  AlertTriangle, 
+  ChevronUp, 
+  ChevronDown 
+} from "lucide-react";
 
-const XrayControl = ({ onStatusChange }) => {
+const XrayControl = () => {
+  // 状态管理
   const [xrayState, setXrayState] = useState({
     isPowered: false,
     isWarmedUp: false,
@@ -20,42 +25,112 @@ const XrayControl = ({ onStatusChange }) => {
   const [showWarmupDialog, setShowWarmupDialog] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
 
-  // 处理暖机确认
-  const handleWarmupConfirm = useCallback(() => {
-    setShowWarmupDialog(false);
-    const newStatus = "XR_IS_ON";
-    setXrayState((prev) => ({
-      ...prev,
-      isPowered: true,
-      isWarmedUp: true,
-      status: newStatus,
-    }));
-    onStatusChange?.(newStatus);
-  }, [onStatusChange]);
-
-  // 使用 useEffect 处理状态变化
-  useEffect(() => {
-    onStatusChange?.(xrayState.status);
-  }, [xrayState.status, onStatusChange]);
-
-  // 处理开关
-  const handlePowerToggle = () => {
-    if (!xrayState.isPowered) {
-      setShowWarmupDialog(true);
-    } else {
-      setXrayState((prev) => {
-        const newState = {
-          ...prev,
-          isPowered: false,
-          isWarmedUp: false,
-          status: "XR_IS_OFF",
-        };
-        onStatusChange(newState.status);
-        return newState;
-      });
+  // 与后端通信的辅助函数
+  const callXrayHandler = async (method, ...args) => {
+    try {
+      const handler = window.chrome.webview.hostObjects.sync.xrayHandler;
+      return await handler[method](...args);
+    } catch (err) {
+      console.error(`Error calling ${method}:`, err);
+      setWarningMessage(err.message);
+      setShowWarning(true);
+      throw err;
     }
   };
-  // 处理拖动开始
+
+  // 定期获取状态更新
+  useEffect(() => {
+    const updateStatus = async () => {
+      try {
+        const status = await callXrayHandler("getStatus");
+        const statusData = JSON.parse(status);
+        setXrayState(prev => ({
+          ...prev,
+          isPowered: statusData.isPowered,
+          isWarmedUp: statusData.isWarmedUp,
+          status: statusData.status
+        }));
+      } catch (err) {
+        console.error("Failed to update status:", err);
+      }
+    };
+
+    const timer = setInterval(updateStatus, 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  // 处理开关
+  const handlePowerToggle = async () => {
+    try {
+      if (!xrayState.isPowered) {
+        setShowWarmupDialog(true);
+      } else {
+        await callXrayHandler("turnOff");
+        setXrayState(prev => ({
+          ...prev,
+          isPowered: false,
+          status: "XR_IS_OFF",
+        }));
+      }
+    } catch (err) {
+      console.error("Power toggle failed:", err);
+    }
+  };
+
+  // 处理预热确认
+  const handleWarmupConfirm = async () => {
+    try {
+      setShowWarmupDialog(false);
+      await callXrayHandler("turnOn");
+      await new Promise(resolve => setTimeout(resolve, 1000)); // Wait for status update
+      const status = await callXrayHandler("getStatus");
+      const statusData = JSON.parse(status);
+      setXrayState(prev => ({
+        ...prev,
+        isPowered: statusData.isPowered,
+        isWarmedUp: statusData.isWarmedUp,
+        status: statusData.status
+      }));
+    } catch (err) {
+      console.error("Warmup failed:", err);
+      setWarningMessage("Failed to start warmup: " + err.message);
+      setShowWarning(true);
+    }
+  };
+
+  // 处理电压改变
+  const handleVoltageChange = async (e) => {
+    const newVoltage = parseInt(e.target.value);
+    try {
+      await callXrayHandler("setVoltage", newVoltage);
+      setXrayState(prev => ({ ...prev, voltage: newVoltage }));
+    } catch (err) {
+      console.error("Failed to set voltage:", err);
+    }
+  };
+
+  // 处理电流改变
+  const handleCurrentChange = async (e) => {
+    const newCurrent = parseInt(e.target.value);
+    try {
+      await callXrayHandler("setCurrent", newCurrent);
+      setXrayState(prev => ({ ...prev, current: newCurrent }));
+    } catch (err) {
+      console.error("Failed to set current:", err);
+    }
+  };
+
+  // 处理聚焦模式改变
+  const handleFocusChange = async (mode) => {
+    try {
+      await callXrayHandler("setFocus", mode);
+      setXrayState(prev => ({ ...prev, focus: mode }));
+    } catch (err) {
+      console.error("Failed to set focus mode:", err);
+    }
+  };
+
+  // 拖拽相关处理函数
   const handleDragStart = (e) => {
     setIsDragging(true);
     setDragStart({
@@ -64,8 +139,7 @@ const XrayControl = ({ onStatusChange }) => {
     });
   };
 
-  // 处理拖动
-  const handleDrag = (e) => {
+  const handleDrag = useCallback((e) => {
     if (isDragging) {
       requestAnimationFrame(() => {
         setPosition({
@@ -74,9 +148,8 @@ const XrayControl = ({ onStatusChange }) => {
         });
       });
     }
-  };
+  }, [isDragging, dragStart]);
 
-  // 处理拖动结束
   const handleDragEnd = () => {
     setIsDragging(false);
   };
@@ -86,6 +159,7 @@ const XrayControl = ({ onStatusChange }) => {
     return ((xrayState.voltage * xrayState.current) / 1000).toFixed(2);
   };
 
+  // 处理拖拽事件监听
   useEffect(() => {
     if (isDragging) {
       window.addEventListener("mousemove", handleDrag);
@@ -95,7 +169,7 @@ const XrayControl = ({ onStatusChange }) => {
       window.removeEventListener("mousemove", handleDrag);
       window.removeEventListener("mouseup", handleDragEnd);
     };
-  }, [isDragging]);
+  }, [isDragging, handleDrag]);
 
   return (
     <>
@@ -104,7 +178,7 @@ const XrayControl = ({ onStatusChange }) => {
         style={{
           transform: `translate(${position.x}px, ${position.y}px)`,
           transition: isDragging ? "none" : "transform 0.3s",
-          width: isCollapsed ? "160px" : "320px", // 收起时宽度改为160px
+          width: isCollapsed ? "160px" : "320px",
           backgroundColor: "white",
           zIndex: 1000,
         }}
@@ -114,14 +188,12 @@ const XrayControl = ({ onStatusChange }) => {
           className="cursor-move py-3 px-4 bg-gray-100 rounded-t-lg flex justify-between items-center"
           onMouseDown={handleDragStart}
         >
-          {/* 收起时显示简要信息 */}
           {isCollapsed ? (
             <div className="flex items-center space-x-3 w-full">
               <Radiation
                 className={`w-5 h-5 ${
                   xrayState.isPowered ? "text-red-500" : "text-gray-400"
                 }`}
-                onClick={handlePowerToggle}
               />
               <div className="text-xs">
                 <div>{xrayState.voltage}kV</div>
@@ -193,12 +265,7 @@ const XrayControl = ({ onStatusChange }) => {
                   min="0"
                   max="200"
                   value={xrayState.voltage}
-                  onChange={(e) =>
-                    setXrayState((prev) => ({
-                      ...prev,
-                      voltage: parseInt(e.target.value),
-                    }))
-                  }
+                  onChange={handleVoltageChange}
                   className="w-full"
                   disabled={!xrayState.isPowered}
                 />
@@ -215,12 +282,7 @@ const XrayControl = ({ onStatusChange }) => {
                   min="0"
                   max="500"
                   value={xrayState.current}
-                  onChange={(e) =>
-                    setXrayState((prev) => ({
-                      ...prev,
-                      current: parseInt(e.target.value),
-                    }))
-                  }
+                  onChange={handleCurrentChange}
                   className="w-full"
                   disabled={!xrayState.isPowered}
                 />
@@ -244,9 +306,7 @@ const XrayControl = ({ onStatusChange }) => {
                   {[0, 1, 2, 3].map((mode) => (
                     <button
                       key={mode}
-                      onClick={() =>
-                        setXrayState((prev) => ({ ...prev, focus: mode }))
-                      }
+                      onClick={() => handleFocusChange(mode)}
                       disabled={!xrayState.isPowered}
                       className={`p-2 rounded ${
                         xrayState.focus === mode
@@ -279,7 +339,7 @@ const XrayControl = ({ onStatusChange }) => {
           </div>
         )}
 
-        {/* Warmup Dialog - 相对于组件定位 */}
+        {/* Warmup Dialog */}
         {showWarmupDialog && (
           <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center rounded-lg">
             <div className="bg-white p-4 rounded-lg shadow-lg w-[80%]">
@@ -307,9 +367,6 @@ const XrayControl = ({ onStatusChange }) => {
       </div>
     </>
   );
-};
-XrayControl.propTypes = {
-  onStatusChange: PropTypes.func.isRequired,
 };
 
 export default XrayControl;
