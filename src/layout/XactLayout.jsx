@@ -30,6 +30,7 @@ const XactLayout = () => {
   const [drawingTool, setDrawingTool] = useState("arrow"); // 'arrow' | 'circle'
   const [showOverlay, setShowOverlay] = useState(true);
   const [showDrawingTools, setShowDrawingTools] = useState(false);
+  const [isDrawingEnabled, setIsDrawingEnabled] = useState(false); // 新增状态
   const [isGridView, setIsGridView] = useState(false);
   const [activeGridIndex, setActiveGridIndex] = useState(0);
 
@@ -41,6 +42,15 @@ const XactLayout = () => {
     { key: "setup", title: "Setup" },
     { key: "help", title: "Help" },
   ];
+
+  // 修改处理画笔工具按钮点击的函数
+  const handleDrawingToolsToggle = () => {
+    setShowDrawingTools(!showDrawingTools);
+    setIsDrawingEnabled(!showDrawingTools); // 同步更新绘图启用状态
+    if (!showDrawingTools) {
+      setDrawingTool("arrow"); // 默认选择箭头工具
+    }
+  };
 
   // 添加切换Grid布局函数
   const toggleGridView = () => {
@@ -255,7 +265,7 @@ const XactLayout = () => {
                 <Filter className="w-6 h-6" />
               </button>
               <button
-                onClick={() => setShowDrawingTools(!showDrawingTools)}
+                onClick={handleDrawingToolsToggle} // 更新这里
                 className={`p-2 rounded transition-colors ${
                   showDrawingTools
                     ? "bg-blue-500 text-black"
@@ -307,6 +317,7 @@ const XactLayout = () => {
                 style={{ width: "100%", height: "100%" }}
                 showOverlay={showOverlay}
                 currentTool={drawingTool}
+                isDrawingEnabled={isDrawingEnabled} // 新增属性
               />
             )}
 
