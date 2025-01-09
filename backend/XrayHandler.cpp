@@ -1,7 +1,8 @@
-// XrayHandler.h
 
+#pragma once
 
-// XrayHandler.cpp
+#include <winsock2.h>
+#include <windows.h>
 #include "XrayHandler.h"
 #include "Xray.h"
 #include <sstream>
@@ -12,7 +13,7 @@ XrayHandler::XrayHandler() : m_xray(nullptr), m_hXrayDll(nullptr) {
 
 XrayHandler::~XrayHandler() {
     if (m_xray) {
-        if (m_xray->IsXrayOn()) {
+        if (m_xray->IsBeamOn()) {
             m_xray->TurnOff();
         }
         m_xray->Close();
@@ -23,10 +24,10 @@ XrayHandler::~XrayHandler() {
 
 bool XrayHandler::LoadXrayDll() {
     // 先尝试当前目录
-    m_hXrayDll = LoadLibrary(L"XRay2.dll");
+    m_hXrayDll = LoadLibraryW(L"XRay2.dll");
     if (!m_hXrayDll) {
         // 尝试bin子目录
-        m_hXrayDll = LoadLibrary(L"bin\\XRay2.dll");
+        m_hXrayDll = LoadLibraryW(L"bin\\XRay2.dll");
     }
     return m_hXrayDll != nullptr;
 }
@@ -49,7 +50,7 @@ HRESULT XrayHandler::Initialize() {
         m_xray = nullptr;
         return E_FAIL;
     }
-    
+
     return S_OK;
 }
 
@@ -67,7 +68,7 @@ HRESULT XrayHandler::SetCurrent(int uA) {
 
 HRESULT XrayHandler::SetFocus(int mode) {
     if (!m_xray) return E_FAIL;
-    m_xray->SetSpotSize(mode);
+    m_xray->SetSpotsize(mode);
     return S_OK;
 }
 
@@ -92,24 +93,24 @@ HRESULT XrayHandler::TurnOff() {
 HRESULT XrayHandler::GetStatus(VARIANT* pResult) {
     if (!m_xray || !pResult) return E_FAIL;
 
-    bool isPowered = m_xray->IsXrayOn();
+    bool isPowered = m_xray->IsBeamOn();
     bool isWarmedUp = !m_xray->IsCold();
     std::string status;
 
     // Convert status to string
     switch (m_xray->State()) {
-        case XR_NOT_INIT_YET: status = "XR_NOT_READY"; break;
-        case XR_IS_COLD: status = "XR_IS_COLD"; break;
-        case XR_IS_OFF: status = "XR_IS_OFF"; break;
-        case XR_IS_ON: status = "XR_IS_ON"; break;
-        default: status = "UNKNOWN";
+    case XR_NOT_INIT_YET: status = "XR_NOT_READY"; break;
+    case XR_IS_COLD: status = "XR_IS_COLD"; break;
+    case XR_IS_OFF: status = "XR_IS_OFF"; break;
+    case XR_IS_ON: status = "XR_IS_ON"; break;
+    default: status = "UNKNOWN";
     }
 
     // Create JSON string
     std::ostringstream json;
     json << "{\"isPowered\":" << (isPowered ? "true" : "false")
-         << ",\"isWarmedUp\":" << (isWarmedUp ? "true" : "false")
-         << ",\"status\":\"" << status << "\"}";
+        << ",\"isWarmedUp\":" << (isWarmedUp ? "true" : "false")
+        << ",\"status\":\"" << status << "\"}";
 
     // Convert to BSTR
     std::wstring wstr = ConvertToWString(json.str());
@@ -163,30 +164,30 @@ STDMETHODIMP XrayHandler::Invoke(DISPID dispIdMember, REFIID riid, LCID lcid,
     if (!pDispParams) return E_INVALIDARG;
 
     switch (dispIdMember) {
-        case 1: // setVoltage
-            if (pDispParams->cArgs != 1) return E_INVALIDARG;
-            return SetVoltage(pDispParams->rgvarg[0].intVal);
+    case 1: // setVoltage
+        if (pDispParams->cArgs != 1) return E_INVALIDARG;
+        return SetVoltage(pDispParams->rgvarg[0].intVal);
 
-        case 2: // setCurrent
-            if (pDispParams->cArgs != 1) return E_INVALIDARG;
-            return SetCurrent(pDispParams->rgvarg[0].intVal);
+    case 2: // setCurrent
+        if (pDispParams->cArgs != 1) return E_INVALIDARG;
+        return SetCurrent(pDispParams->rgvarg[0].intVal);
 
-        case 3: // setFocus
-            if (pDispParams->cArgs != 1) return E_INVALIDARG;
-            return SetFocus(pDispParams->rgvarg[0].intVal);
+    case 3: // setFocus
+        if (pDispParams->cArgs != 1) return E_INVALIDARG;
+        return SetFocus(pDispParams->rgvarg[0].intVal);
 
-        case 4: // turnOn
-            return TurnOn();
+    case 4: // turnOn
+        return TurnOn();
 
-        case 5: // turnOff
-            return TurnOff();
+    case 5: // turnOff
+        return TurnOff();
 
-        case 6: // getStatus
-            if (!pVarResult) return E_INVALIDARG;
-            return GetStatus(pVarResult);
+    case 6: // getStatus
+        if (!pVarResult) return E_INVALIDARG;
+        return GetStatus(pVarResult);
 
-        default:
-            return DISP_E_MEMBERNOTFOUND;
+    default:
+        return DISP_E_MEMBERNOTFOUND;
     }
 }
 

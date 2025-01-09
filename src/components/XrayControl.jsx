@@ -1,10 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { 
-  Radiation, 
-  AlertTriangle, 
-  ChevronUp, 
-  ChevronDown 
-} from "lucide-react";
+import { Radiation, AlertTriangle, ChevronUp, ChevronDown } from "lucide-react";
 
 const XrayControl = () => {
   // 状态管理
@@ -28,27 +23,47 @@ const XrayControl = () => {
   // 与后端通信的辅助函数
   const callXrayHandler = async (method, ...args) => {
     try {
-      const handler = window.chrome.webview.hostObjects.sync.xrayHandler;
-      return await handler[method](...args);
+      const handler = window.chrome.webview.hostObjects.xrayHandler;
+      // 使用明确的方法名而不是动态调用
+      switch (method) {
+        case "getStatus":
+          return await handler.getStatus();
+        case "setVoltage":
+          return await handler.setVoltage(args[0]);
+        case "setCurrent":
+          return await handler.setCurrent(args[0]);
+        case "setFocus":
+          return await handler.setFocus(args[0]);
+        case "turnOn":
+          return await handler.turnOn();
+        case "turnOff":
+          return await handler.turnOff();
+        default:
+          throw new Error(`Unknown method: ${method}`);
+      }
     } catch (err) {
       console.error(`Error calling ${method}:`, err);
-      setWarningMessage(err.message);
-      setShowWarning(true);
       throw err;
     }
   };
 
   // 定期获取状态更新
   useEffect(() => {
+    // 检查xrayHandler是否可用
+    if (!window.chrome?.webview?.hostObjects?.xrayHandler) {
+      console.error("XrayHandler not available");
+      return;
+    }
+
     const updateStatus = async () => {
       try {
         const status = await callXrayHandler("getStatus");
         const statusData = JSON.parse(status);
-        setXrayState(prev => ({
+        setXrayState((prev) => ({
           ...prev,
           isPowered: statusData.isPowered,
           isWarmedUp: statusData.isWarmedUp,
-          status: statusData.status
+          status: statusData.status,
         }));
       } catch (err) {
         console.error("Failed to update status:", err);
@@ -66,7 +81,7 @@ const XrayControl = () => {
         setShowWarmupDialog(true);
       } else {
         await callXrayHandler("turnOff");
-        setXrayState(prev => ({
+        setXrayState((prev) => ({
           ...prev,
           isPowered: false,
           status: "XR_IS_OFF",
@@ -82,14 +97,14 @@ const XrayControl = () => {
     try {
       setShowWarmupDialog(false);
       await callXrayHandler("turnOn");
-      await new Promise(resolve => setTimeout(resolve, 1000)); // Wait for status update
+      await new Promise((resolve) => setTimeout(resolve, 1000)); // Wait for status update
       const status = await callXrayHandler("getStatus");
       const statusData = JSON.parse(status);
-      setXrayState(prev => ({
+      setXrayState((prev) => ({
         ...prev,
         isPowered: statusData.isPowered,
         isWarmedUp: statusData.isWarmedUp,
-        status: statusData.status
+        status: statusData.status,
       }));
     } catch (err) {
       console.error("Warmup failed:", err);
@@ -103,7 +118,7 @@ const XrayControl = () => {
     const newVoltage = parseInt(e.target.value);
     try {
       await callXrayHandler("setVoltage", newVoltage);
-      setXrayState(prev => ({ ...prev, voltage: newVoltage }));
+      setXrayState((prev) => ({ ...prev, voltage: newVoltage }));
     } catch (err) {
       console.error("Failed to set voltage:", err);
     }
@@ -114,7 +129,7 @@ const XrayControl = () => {
     const newCurrent = parseInt(e.target.value);
     try {
       await callXrayHandler("setCurrent", newCurrent);
-      setXrayState(prev => ({ ...prev, current: newCurrent }));
+      setXrayState((prev) => ({ ...prev, current: newCurrent }));
     } catch (err) {
       console.error("Failed to set current:", err);
     }
@@ -124,7 +139,7 @@ const XrayControl = () => {
   const handleFocusChange = async (mode) => {
     try {
       await callXrayHandler("setFocus", mode);
-      setXrayState(prev => ({ ...prev, focus: mode }));
+      setXrayState((prev) => ({ ...prev, focus: mode }));
     } catch (err) {
       console.error("Failed to set focus mode:", err);
     }
@@ -139,16 +154,19 @@ const XrayControl = () => {
     });
   };
 
-  const handleDrag = useCallback((e) => {
-    if (isDragging) {
-      requestAnimationFrame(() => {
-        setPosition({
-          x: e.clientX - dragStart.x,
-          y: e.clientY - dragStart.y,
+  const handleDrag = useCallback(
+    (e) => {
+      if (isDragging) {
+        requestAnimationFrame(() => {
+          setPosition({
+            x: e.clientX - dragStart.x,
+            y: e.clientY - dragStart.y,
+          });
         });
-      });
-    }
-  }, [isDragging, dragStart]);
+      }
+    },
+    [isDragging, dragStart]
+  );
 
   const handleDragEnd = () => {
     setIsDragging(false);
