@@ -1,6 +1,14 @@
 import { useState, useEffect, useCallback } from "react";
 import { Radiation, AlertTriangle, ChevronUp, ChevronDown } from "lucide-react";
 
+const DEBUG = true;
+
+function log(...args) {
+  if (DEBUG) {
+    console.log('[XrayControl]', ...args);
+  }
+}
+
 const XrayControl = () => {
   // 状态管理
   const [xrayState, setXrayState] = useState({
@@ -20,24 +28,62 @@ const XrayControl = () => {
   const [showWarmupDialog, setShowWarmupDialog] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
 
-  // 处理开关
+  // XrayControl.jsx
+  const callXrayHandler = async (method, ...args) => {
+    try {
+      if (!window.chrome?.webview?.hostObjects?.sync?.xrayHandler) {
+        throw new Error("XrayHandler not available");
+      }
+
+      const handler = window.chrome.webview.hostObjects.sync.xrayHandler;
+      console.log(`Calling ${method} with args:`, args);
+
+      // 根据方法类型做特殊处理
+      switch (method) {
+        case "turnOnWithParams": {
+          // 确保参数是整数
+          const voltage = parseInt(args[0], 10);
+          const current = parseInt(args[1], 10);
+          console.log(
+            `turnOnWithParams: voltage=${voltage}, current=${current}`
+          );
+          return await handler.turnOnWithParams(voltage, current);
+        }
+
+        case "getStatus":
+          return await handler.getStatus();
+
+        default:
+          return await handler[method](...args);
+      }
+    } catch (err) {
+      console.error(`Error in callXrayHandler(${method}):`, err);
+      throw err;
+    }
+  };
+
+  // 修改 handlePowerToggle
   const handlePowerToggle = async () => {
     try {
       if (!xrayState.isPowered) {
+        const voltage = parseInt(xrayState.voltage, 10);
+        const current = parseInt(xrayState.current, 10);
+
+        console.log("Power toggle: attempting to turn on with", {
+          voltage,
+          current,
+        });
+
         if (xrayState.status === "XR_IS_COLD") {
           setShowWarmupDialog(true);
         } else {
-          // 确保传递数字类型参数
-          await callXrayHandler(
-            "turnOnWithParams",
-            parseInt(xrayState.voltage),
-            parseInt(xrayState.current)
-          );
+          await callXrayHandler("turnOnWithParams", voltage, current);
+          await updateStatus();
         }
       } else {
         await callXrayHandler("turnOff");
+        await updateStatus();
       }
-      await updateStatus();
     } catch (err) {
       console.error("Power toggle failed:", err);
       setWarningMessage(err.message);
@@ -64,35 +110,6 @@ const XrayControl = () => {
       console.error("Warmup failed:", err);
       setWarningMessage("Failed to start warmup: " + err.message);
       setShowWarning(true);
-    }
-  };
-
-  // 修改调用函数
-  const callXrayHandler = async (method, ...args) => {
-    try {
-      if (!window.chrome?.webview?.hostObjects?.xrayHandler) {
-        console.error("XrayHandler not available");
-        throw new Error("XrayHandler not available");
-      }
-
-      const handler = window.chrome.webview.hostObjects.xrayHandler;
-      console.log(`Calling ${method} with args:`, args);
-
-      // 确保参数是数字类型
-      const numericArgs = args.map((arg) => {
-        const num = Number(arg);
-        if (isNaN(num)) {
-          throw new Error(`Invalid argument: ${arg} is not a number`);
-        }
-        return num;
-      });
-
-      const result = await handler[method].apply(handler, numericArgs);
-      console.log(`${method} result:`, result);
-      return result;
-    } catch (err) {
-      console.error(`Error in callXrayHandler(${method}):`, err);
-      throw err;
     }
   };
 

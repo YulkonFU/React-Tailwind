@@ -124,8 +124,7 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
     return TRUE;
 }
 
-void InitializeWebView2(HWND hWnd)
-{
+void InitializeWebView2(HWND hWnd) {
     CreateCoreWebView2EnvironmentWithOptions(nullptr, nullptr, nullptr,
         Callback<ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler>(
             [hWnd](HRESULT result, ICoreWebView2Environment* env) -> HRESULT
@@ -135,37 +134,52 @@ void InitializeWebView2(HWND hWnd)
                     Callback<ICoreWebView2CreateCoreWebView2ControllerCompletedHandler>(
                         [hWnd](HRESULT result, ICoreWebView2Controller* controller) -> HRESULT
                         {
-                            if (controller)
-                            {
+                            if (controller) {
                                 webViewController = controller;
                                 webViewController->get_CoreWebView2(&webViewWindow);
 
-                                // 确保 XrayHandler 正确创建和注册
+                                // 设置 WebView2 选项
+                                ICoreWebView2Settings* settings;
+                                webViewWindow->get_Settings(&settings);
+                                settings->put_IsScriptEnabled(TRUE);
+                                settings->put_AreDefaultScriptDialogsEnabled(TRUE);
+                                settings->put_IsWebMessageEnabled(TRUE);
+                                settings->put_AreDevToolsEnabled(TRUE);
+
+                                // 注册 XrayHandler
                                 try {
                                     xrayHandler = Microsoft::WRL::Make<XrayHandler>();
                                     if (xrayHandler && webViewWindow) {
-                                        // 使用 VARIANT 来包装对象
                                         VARIANT var;
                                         VariantInit(&var);
                                         var.vt = VT_DISPATCH;
                                         var.pdispVal = xrayHandler.Get();
-                                        
+
+                                        // 添加为同步对象
                                         HRESULT hr = webViewWindow->AddHostObjectToScript(L"xrayHandler", &var);
                                         if (FAILED(hr)) {
                                             OutputDebugString(L"Failed to register xrayHandler\n");
+                                            return hr;
                                         }
                                         VariantClear(&var);
+                                        OutputDebugString(L"Successfully registered xrayHandler\n");
                                     }
                                 }
+                                catch (const std::exception& e) {
+                                    OutputDebugStringA(e.what());
+                                    return E_FAIL;
+                                }
                                 catch (...) {
-                                    OutputDebugString(L"Exception during XrayHandler creation\n");
+                                    OutputDebugString(L"Unknown exception during XrayHandler creation\n");
                                     return E_FAIL;
                                 }
 
-                                // 设置窗口大小和导航
+                                // 设置窗口大小
                                 RECT bounds;
                                 GetClientRect(hWnd, &bounds);
                                 controller->put_Bounds(bounds);
+
+                                // 导航到本地页面
                                 webViewWindow->Navigate(L"http://localhost:5173/");
                             }
                             return S_OK;
@@ -222,7 +236,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 }
 
 INT_PTR CALLBACK About(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
-{
+{s
     UNREFERENCED_PARAMETER(lParam);
     switch (message)
     {
