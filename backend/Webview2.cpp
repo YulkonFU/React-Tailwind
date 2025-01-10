@@ -126,51 +126,50 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 
 void InitializeWebView2(HWND hWnd)
 {
-    // Create WebView2 Environment
     CreateCoreWebView2EnvironmentWithOptions(nullptr, nullptr, nullptr,
         Callback<ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler>(
-            [hWnd](HRESULT result, ICoreWebView2Environment* env) -> HRESULT {
-
-                // Create WebView2 Controller
+            [hWnd](HRESULT result, ICoreWebView2Environment* env) -> HRESULT
+            {
+                if (!env) return E_FAIL;
                 env->CreateCoreWebView2Controller(hWnd,
                     Callback<ICoreWebView2CreateCoreWebView2ControllerCompletedHandler>(
-                        [hWnd](HRESULT result, ICoreWebView2Controller* controller) -> HRESULT {
-                            if (controller != nullptr) {
+                        [hWnd](HRESULT result, ICoreWebView2Controller* controller) -> HRESULT
+                        {
+                            if (controller)
+                            {
                                 webViewController = controller;
                                 webViewController->get_CoreWebView2(&webViewWindow);
 
-                                // Configure WebView2 Settings
-                                ICoreWebView2Settings* Settings;
-                                webViewWindow->get_Settings(&Settings);
-                                Settings->put_IsScriptEnabled(TRUE);
-                                Settings->put_AreDefaultScriptDialogsEnabled(TRUE);
-                                Settings->put_IsWebMessageEnabled(TRUE);
-                                Settings->put_AreDevToolsEnabled(TRUE);
+                                // 确保 XrayHandler 正确创建和注册
+                                try {
+                                    xrayHandler = Microsoft::WRL::Make<XrayHandler>();
+                                    if (xrayHandler && webViewWindow) {
+                                        // 使用 VARIANT 来包装对象
+                                        VARIANT var;
+                                        VariantInit(&var);
+                                        var.vt = VT_DISPATCH;
+                                        var.pdispVal = xrayHandler.Get();
+                                        
+                                        HRESULT hr = webViewWindow->AddHostObjectToScript(L"xrayHandler", &var);
+                                        if (FAILED(hr)) {
+                                            OutputDebugString(L"Failed to register xrayHandler\n");
+                                        }
+                                        VariantClear(&var);
+                                    }
+                                }
+                                catch (...) {
+                                    OutputDebugString(L"Exception during XrayHandler creation\n");
+                                    return E_FAIL;
+                                }
 
-                                // Create and register XrayHandler
-                                xrayHandler = Microsoft::WRL::Make<XrayHandler>();
-
-                                // Add XrayHandler as a host object
-                                VARIANT var;
-                                VariantInit(&var);
-                                var.vt = VT_DISPATCH;
-                                var.pdispVal = xrayHandler.Get();
-
-                                webViewWindow->AddHostObjectToScript(L"xrayHandler", &var);
-                                VariantClear(&var);
-
-                                // Set initial window size
+                                // 设置窗口大小和导航
                                 RECT bounds;
                                 GetClientRect(hWnd, &bounds);
                                 controller->put_Bounds(bounds);
-
-                                // Navigate to local development server
                                 webViewWindow->Navigate(L"http://localhost:5173/");
                             }
-
                             return S_OK;
                         }).Get());
-
                 return S_OK;
             }).Get());
 }

@@ -6,16 +6,19 @@
 #include <string>
 #include "Xray.h"
 
+// Debug 日志宏
+#ifdef _DEBUG
+#define LOG_DEBUG(msg, ...) { \
+    wchar_t buf[1024]; \
+    swprintf_s(buf, L"[DEBUG] " msg L"\n", __VA_ARGS__); \
+    OutputDebugString(buf); \
+}
+#else
+#define LOG_DEBUG(msg, ...) 
+#endif
+
 // 前向声明以避免包含 Xray.h
 class CXray;
-
-// 添加枚举定义
-enum XrayState {
-    XR_NOT_INIT_YET,
-    XR_IS_COLD,
-    XR_IS_OFF,
-    XR_IS_ON
-};
 
 class XrayHandler : public Microsoft::WRL::RuntimeClass<
     Microsoft::WRL::RuntimeClassFlags<Microsoft::WRL::ClassicCom>,

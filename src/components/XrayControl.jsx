@@ -20,29 +20,78 @@ const XrayControl = () => {
   const [showWarmupDialog, setShowWarmupDialog] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
 
-  // 与后端通信的辅助函数
+  // 处理开关
+  const handlePowerToggle = async () => {
+    try {
+      if (!xrayState.isPowered) {
+        if (xrayState.status === "XR_IS_COLD") {
+          setShowWarmupDialog(true);
+        } else {
+          // 确保传递数字类型参数
+          await callXrayHandler(
+            "turnOnWithParams",
+            parseInt(xrayState.voltage),
+            parseInt(xrayState.current)
+          );
+        }
+      } else {
+        await callXrayHandler("turnOff");
+      }
+      await updateStatus();
+    } catch (err) {
+      console.error("Power toggle failed:", err);
+      setWarningMessage(err.message);
+      setShowWarning(true);
+    }
+  };
+
+  // 处理预热确认
+  const handleWarmupConfirm = async () => {
+    try {
+      setShowWarmupDialog(false);
+      // 先启动预热
+      await callXrayHandler("startWarmup");
+      // 等待预热完成
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+      // 然后开启X射线
+      await callXrayHandler(
+        "turnOnWithParams",
+        xrayState.voltage,
+        xrayState.current
+      );
+      await updateStatus();
+    } catch (err) {
+      console.error("Warmup failed:", err);
+      setWarningMessage("Failed to start warmup: " + err.message);
+      setShowWarning(true);
+    }
+  };
+
+  // 修改调用函数
   const callXrayHandler = async (method, ...args) => {
     try {
-      const handler = window.chrome.webview.hostObjects.xrayHandler;
-      // 使用明确的方法名而不是动态调用
-      switch (method) {
-        case "getStatus":
-          return await handler.getStatus();
-        case "setVoltage":
-          return await handler.setVoltage(args[0]);
-        case "setCurrent":
-          return await handler.setCurrent(args[0]);
-        case "setFocus":
-          return await handler.setFocus(args[0]);
-        case "turnOn":
-          return await handler.turnOn();
-        case "turnOff":
-          return await handler.turnOff();
-        default:
-          throw new Error(`Unknown method: ${method}`);
+      if (!window.chrome?.webview?.hostObjects?.xrayHandler) {
+        console.error("XrayHandler not available");
+        throw new Error("XrayHandler not available");
       }
+
+      const handler = window.chrome.webview.hostObjects.xrayHandler;
+      console.log(`Calling ${method} with args:`, args);
+
+      // 确保参数是数字类型
+      const numericArgs = args.map((arg) => {
+        const num = Number(arg);
+        if (isNaN(num)) {
+          throw new Error(`Invalid argument: ${arg} is not a number`);
+        }
+        return num;
+      });
+
+      const result = await handler[method].apply(handler, numericArgs);
+      console.log(`${method} result:`, result);
+      return result;
     } catch (err) {
-      console.error(`Error calling ${method}:`, err);
+      console.error(`Error in callXrayHandler(${method}):`, err);
       throw err;
     }
   };
@@ -55,49 +104,12 @@ const XrayControl = () => {
       return;
     }
 
-    const updateStatus = async () => {
-      try {
-        const status = await callXrayHandler("getStatus");
-        const statusData = JSON.parse(status);
-        setXrayState((prev) => ({
-          ...prev,
-          isPowered: statusData.isPowered,
-          isWarmedUp: statusData.isWarmedUp,
-          status: statusData.status,
-        }));
-      } catch (err) {
-        console.error("Failed to update status:", err);
-      }
-    };
-
     const timer = setInterval(updateStatus, 1000);
     return () => clearInterval(timer);
   }, []);
 
-  // 处理开关
-  const handlePowerToggle = async () => {
+  const updateStatus = async () => {
     try {
-      if (!xrayState.isPowered) {
-        setShowWarmupDialog(true);
-      } else {
-        await callXrayHandler("turnOff");
-        setXrayState((prev) => ({
-          ...prev,
-          isPowered: false,
-          status: "XR_IS_OFF",
-        }));
-      }
-    } catch (err) {
-      console.error("Power toggle failed:", err);
-    }
-  };
-
-  // 处理预热确认
-  const handleWarmupConfirm = async () => {
-    try {
-      setShowWarmupDialog(false);
-      await callXrayHandler("turnOn");
-      await new Promise((resolve) => setTimeout(resolve, 1000)); // Wait for status update
       const status = await callXrayHandler("getStatus");
       const statusData = JSON.parse(status);
       setXrayState((prev) => ({
@@ -107,9 +119,7 @@ const XrayControl = () => {
         status: statusData.status,
       }));
     } catch (err) {
-      console.error("Warmup failed:", err);
-      setWarningMessage("Failed to start warmup: " + err.message);
-      setShowWarning(true);
+      console.error("Failed to update status:", err);
     }
   };
 
