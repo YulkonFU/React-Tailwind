@@ -262,34 +262,37 @@ STDMETHODIMP XrayHandler::GetTypeInfo(UINT iTInfo, LCID lcid, ITypeInfo** ppTInf
 STDMETHODIMP XrayHandler::GetIDsOfNames(REFIID riid, LPOLESTR* rgszNames, UINT cNames,
     LCID lcid, DISPID* rgDispId)
 {
-    static const struct
-    {
-        const wchar_t* name;
-        DISPID id;
-    } methods[] = {
-        {L"initialize", 1},       // Initialize/Connect
-        {L"startWarmup", 2},      // Start warmup if cold
-        {L"setVoltage", 3},       // Set kV
-        {L"setCurrent", 4},       // Set uA
-        {L"turnOn", 5},           // Turn on
-        {L"turnOff", 6},          // Turn off
-        {L"setFocus", 7},         // Set focus mode
-        {L"getStatus", 8},        // Get current status
-        {L"getSpotsizeCount", 9}, // Get supported spotsize count
-        {L"getSpotsize", 10}      // Get current spotsize
-    };
-
     if (!rgszNames || !rgDispId)
         return E_INVALIDARG;
 
-    for (const auto& method : methods)
-    {
-        if (wcscmp(rgszNames[0], method.name) == 0)
-        {
-            rgDispId[0] = method.id;
+    // 添加 initialize 方法
+    static const struct {
+        const wchar_t* name;
+        DISPID id;
+    } methods[] = {
+        {L"initialize", 1},
+        {L"startWarmup", 2}, 
+        {L"setVoltage", 3},
+        {L"setCurrent", 4},
+        {L"turnOn", 5},
+        {L"turnOff", 6},
+        {L"setFocus", 7},
+        {L"getStatus", 8},
+        {L"getSpotsizeCount", 9},
+        {L"getSpotsize", 10}
+    };
+
+    OutputDebugString(L"GetIDsOfNames called for: ");
+    OutputDebugString(rgszNames[0]);
+    OutputDebugString(L"\n");
+
+    for (const auto& method : methods) {
+        if (wcscmp(rgszNames[0], method.name) == 0) {
+            *rgDispId = method.id;
             return S_OK;
         }
     }
+
     return DISP_E_UNKNOWNNAME;
 }
 

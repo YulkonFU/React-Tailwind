@@ -29,78 +29,53 @@ const XrayControl = () => {
   const [spotSizes, setSpotSizes] = useState([]);
 
   // 初始化时获取焦点模式
-  useEffect(() => {
-    const initSpotSizes = async () => {
-      const count = await callXrayHandler("getSpotsizeCount");
-      setSpotSizes(Array.from({ length: count }, (_, i) => i));
-    };
-    initSpotSizes();
-  }, []);
+  // useEffect(() => {
+  //   const initSpotSizes = async () => {
+  //     const count = await callXrayHandler("getSpotsizeCount");
+  //     setSpotSizes(Array.from({ length: count }, (_, i) => i));
+  //   };
+  //   initSpotSizes();
+  // }, []);
 
   // XrayControl.jsx 修改 callXrayHandler:
   // ...existing code...
 
   const callXrayHandler = async (method, ...args) => {
     try {
-      if (!window.chrome?.webview?.hostObjects?.sync?.xrayHandler) {
-        throw new Error("XrayHandler not available");
-      }
-  
-      // 获取sync模式的handler
-      const handler = window.chrome.webview.hostObjects.sync.xrayHandler;
-      console.log(`Calling ${method} with args:`, args);
-  
-      // 使用dispatchEvent方式调用COM接口
-      var event = new Event(method);
-      event.args = args;
-      return new Promise((resolve, reject) => {
-        try {
-          // 直接调用COM对象方法
-          switch(method) {
-            case 'turnOn':
-              resolve(handler.Invoke(5, null, null, null, null)); 
-              break;
-            case 'turnOff':
-              resolve(handler.Invoke(6, null, null, null, null));
-              break;  
-            case 'getStatus':
-              resolve(handler.Invoke(8, null, null, null, null));
-              break;
-            case 'setFocus': {
-              const param = { cArgs: 1, rgvarg: [{ vt: 3, intVal: args[0] }] };
-              resolve(handler.Invoke(7, null, null, 0, param));
-              break;
-            }
-            default:
-              reject(new Error(`Unknown method: ${method}`));
-          }
-        } catch(err) {
-          reject(err);
+        const handler = window.chrome?.webview?.hostObjects?.sync?.xrayHandler;
+        if (!handler) {
+            throw new Error("XrayHandler not available");
         }
-      });
+
+        // 直接调用方法
+        const result = await handler[method];
+        console.log(`${method} result:`, result);
+        return result;
     } catch (err) {
-      console.error(`Error in callXrayHandler(${method}):`, err);
-      throw err;
+        console.error(`Error in callXrayHandler(${method}):`, err);
+        throw err;
     }
-  };
+};
 
-  // ...existing code...
-
-  const handlePowerToggle = async () => {
+const handlePowerToggle = async () => {
     try {
-      if (!xrayState.isPowered) {
-        // 直接调用无参 turnOn
-        await callXrayHandler("turnOn");
-      } else {
-        await callXrayHandler("turnOff");
-      }
-      await updateStatus();
+        const handler = window.chrome?.webview?.hostObjects?.sync?.xrayHandler;
+        if (!handler) {
+            throw new Error("XrayHandler not available");
+        }
+
+        if (!xrayState.isPowered) {
+            await handler.turnOn;  // 直接访问属性
+        } else {
+            await handler.turnOff;
+        }
+        await updateStatus();
     } catch (err) {
-      console.error("Power toggle failed:", err);
-      setWarningMessage(err.message);
-      setShowWarning(true);
+        console.error("Power toggle failed:", err);
+        setWarningMessage(err.message);
+        setShowWarning(true);
     }
-  };
+};
 
   // 电压和电流从状态更新中获取
   const updateStatus = async () => {
