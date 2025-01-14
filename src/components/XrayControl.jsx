@@ -5,7 +5,7 @@ const DEBUG = true;
 
 function log(...args) {
   if (DEBUG) {
-    console.log('[XrayControl]', ...args);
+    console.log("[XrayControl]", ...args);
   }
 }
 
@@ -25,65 +25,76 @@ const XrayControl = () => {
   const [position, setPosition] = useState({ x: 20, y: 20 });
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
-  const [showWarmupDialog, setShowWarmupDialog] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [spotSizes, setSpotSizes] = useState([]);
 
-  // XrayControl.jsx
+  // 初始化时获取焦点模式
+  useEffect(() => {
+    const initSpotSizes = async () => {
+      const count = await callXrayHandler("getSpotsizeCount");
+      setSpotSizes(Array.from({ length: count }, (_, i) => i));
+    };
+    initSpotSizes();
+  }, []);
+
+  // XrayControl.jsx 修改 callXrayHandler:
+  // ...existing code...
+
   const callXrayHandler = async (method, ...args) => {
     try {
       if (!window.chrome?.webview?.hostObjects?.sync?.xrayHandler) {
         throw new Error("XrayHandler not available");
       }
-
+  
+      // 获取sync模式的handler
       const handler = window.chrome.webview.hostObjects.sync.xrayHandler;
       console.log(`Calling ${method} with args:`, args);
-
-      // 根据方法类型做特殊处理
-      switch (method) {
-        case "turnOnWithParams": {
-          // 确保参数是整数
-          const voltage = parseInt(args[0], 10);
-          const current = parseInt(args[1], 10);
-          console.log(
-            `turnOnWithParams: voltage=${voltage}, current=${current}`
-          );
-          return await handler.turnOnWithParams(voltage, current);
+  
+      // 使用dispatchEvent方式调用COM接口
+      var event = new Event(method);
+      event.args = args;
+      return new Promise((resolve, reject) => {
+        try {
+          // 直接调用COM对象方法
+          switch(method) {
+            case 'turnOn':
+              resolve(handler.Invoke(5, null, null, null, null)); 
+              break;
+            case 'turnOff':
+              resolve(handler.Invoke(6, null, null, null, null));
+              break;  
+            case 'getStatus':
+              resolve(handler.Invoke(8, null, null, null, null));
+              break;
+            case 'setFocus': {
+              const param = { cArgs: 1, rgvarg: [{ vt: 3, intVal: args[0] }] };
+              resolve(handler.Invoke(7, null, null, 0, param));
+              break;
+            }
+            default:
+              reject(new Error(`Unknown method: ${method}`));
+          }
+        } catch(err) {
+          reject(err);
         }
-
-        case "getStatus":
-          return await handler.getStatus();
-
-        default:
-          return await handler[method](...args);
-      }
+      });
     } catch (err) {
       console.error(`Error in callXrayHandler(${method}):`, err);
       throw err;
     }
   };
 
-  // 修改 handlePowerToggle
+  // ...existing code...
+
   const handlePowerToggle = async () => {
     try {
       if (!xrayState.isPowered) {
-        const voltage = parseInt(xrayState.voltage, 10);
-        const current = parseInt(xrayState.current, 10);
-
-        console.log("Power toggle: attempting to turn on with", {
-          voltage,
-          current,
-        });
-
-        if (xrayState.status === "XR_IS_COLD") {
-          setShowWarmupDialog(true);
-        } else {
-          await callXrayHandler("turnOnWithParams", voltage, current);
-          await updateStatus();
-        }
+        // 直接调用无参 turnOn
+        await callXrayHandler("turnOn");
       } else {
         await callXrayHandler("turnOff");
-        await updateStatus();
       }
+      await updateStatus();
     } catch (err) {
       console.error("Power toggle failed:", err);
       setWarningMessage(err.message);
@@ -91,40 +102,7 @@ const XrayControl = () => {
     }
   };
 
-  // 处理预热确认
-  const handleWarmupConfirm = async () => {
-    try {
-      setShowWarmupDialog(false);
-      // 先启动预热
-      await callXrayHandler("startWarmup");
-      // 等待预热完成
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-      // 然后开启X射线
-      await callXrayHandler(
-        "turnOnWithParams",
-        xrayState.voltage,
-        xrayState.current
-      );
-      await updateStatus();
-    } catch (err) {
-      console.error("Warmup failed:", err);
-      setWarningMessage("Failed to start warmup: " + err.message);
-      setShowWarning(true);
-    }
-  };
-
-  // 定期获取状态更新
-  useEffect(() => {
-    // 检查xrayHandler是否可用
-    if (!window.chrome?.webview?.hostObjects?.xrayHandler) {
-      console.error("XrayHandler not available");
-      return;
-    }
-
-    const timer = setInterval(updateStatus, 1000);
-    return () => clearInterval(timer);
-  }, []);
-
+  // 电压和电流从状态更新中获取
   const updateStatus = async () => {
     try {
       const status = await callXrayHandler("getStatus");
@@ -134,6 +112,8 @@ const XrayControl = () => {
         isPowered: statusData.isPowered,
         isWarmedUp: statusData.isWarmedUp,
         status: statusData.status,
+        voltage: statusData.voltage, // 从状态更新中获取实际值
+        current: statusData.current, // 从状态更新中获取实际值
       }));
     } catch (err) {
       console.error("Failed to update status:", err);
@@ -299,38 +279,32 @@ const XrayControl = () => {
 
             {/* 控制面板 */}
             <div className="space-y-4">
-              {/* Voltage Control */}
+              {/* Voltage Display */}
               <div className="space-y-2">
                 <div className="flex justify-between">
                   <label className="text-sm font-medium">Voltage (kV)</label>
                   <span className="text-sm">{xrayState.voltage} kV</span>
                 </div>
-                <input
-                  type="range"
-                  min="0"
-                  max="200"
-                  value={xrayState.voltage}
-                  onChange={handleVoltageChange}
-                  className="w-full"
-                  disabled={!xrayState.isPowered}
-                />
+                <div className="w-full h-2 bg-gray-200 rounded">
+                  <div
+                    className="h-full bg-blue-500 rounded"
+                    style={{ width: `${(xrayState.voltage / 200) * 100}%` }}
+                  />
+                </div>
               </div>
 
-              {/* Current Control */}
+              {/* Current Display */}
               <div className="space-y-2">
                 <div className="flex justify-between">
                   <label className="text-sm font-medium">Current (µA)</label>
                   <span className="text-sm">{xrayState.current} µA</span>
                 </div>
-                <input
-                  type="range"
-                  min="0"
-                  max="500"
-                  value={xrayState.current}
-                  onChange={handleCurrentChange}
-                  className="w-full"
-                  disabled={!xrayState.isPowered}
-                />
+                <div className="w-full h-2 bg-gray-200 rounded">
+                  <div
+                    className="h-full bg-blue-500 rounded"
+                    style={{ width: `${(xrayState.current / 500) * 100}%` }}
+                  />
+                </div>
               </div>
 
               {/* Power Display */}
@@ -345,25 +319,20 @@ const XrayControl = () => {
               <div className="space-y-2">
                 <div className="flex justify-between items-center">
                   <label className="text-sm font-medium">Focus Mode</label>
-                  <span className="text-sm">Mode {xrayState.focus}</span>
-                </div>
-                <div className="grid grid-cols-4 gap-2">
-                  {[0, 1, 2, 3].map((mode) => (
-                    <button
-                      key={mode}
-                      onClick={() => handleFocusChange(mode)}
-                      disabled={!xrayState.isPowered}
-                      className={`p-2 rounded ${
-                        xrayState.focus === mode
-                          ? "bg-blue-500 text-white"
-                          : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                      } ${
-                        !xrayState.isPowered && "opacity-50 cursor-not-allowed"
-                      }`}
-                    >
-                      F{mode}
-                    </button>
-                  ))}
+                  <select
+                    value={xrayState.focus}
+                    onChange={(e) =>
+                      handleFocusChange(parseInt(e.target.value))
+                    }
+                    disabled={!xrayState.isPowered}
+                    className="bg-gray-50 border border-gray-300 rounded-md"
+                  >
+                    {spotSizes.map((mode) => (
+                      <option key={mode} value={mode}>
+                        F{mode}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               </div>
             </div>
@@ -381,32 +350,6 @@ const XrayControl = () => {
                 </button>
               </div>
             )}
-          </div>
-        )}
-
-        {/* Warmup Dialog */}
-        {showWarmupDialog && (
-          <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center rounded-lg">
-            <div className="bg-white p-4 rounded-lg shadow-lg w-[80%]">
-              <h3 className="text-lg font-medium mb-2">Warm-up Required</h3>
-              <p className="text-sm text-gray-600 mb-4">
-                Do you want to proceed with warm-up?
-              </p>
-              <div className="flex justify-end space-x-2">
-                <button
-                  onClick={() => setShowWarmupDialog(false)}
-                  className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleWarmupConfirm}
-                  className="px-4 py-2 text-sm text-white bg-blue-500 hover:bg-blue-600 rounded"
-                >
-                  Yes, Proceed
-                </button>
-              </div>
-            </div>
           </div>
         )}
       </div>

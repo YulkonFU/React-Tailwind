@@ -52,4 +52,8 @@ public:
     HRESULT TurnOn();
     HRESULT TurnOff();
     HRESULT GetStatus(VARIANT* pResult);
+    HRESULT GetSpotsizeCount(); // 获取支持的焦点模式数量
+    HRESULT GetSpotsize(); // 获取当前焦点模式
+
+
 };
