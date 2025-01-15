@@ -1,5 +1,12 @@
 import { useState, useEffect, useCallback } from "react";
-import { Radiation, AlertTriangle, ChevronUp, ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
+import {
+  Radiation,
+  AlertTriangle,
+  ChevronUp,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+} from "lucide-react";
 
 const DEBUG = true;
 
@@ -9,7 +16,7 @@ function log(...args) {
   }
 }
 
-const XrayControl = () => {
+const XrayControl = ({ onStatusChange }) => {
   // 状态管理
   const [xrayState, setXrayState] = useState({
     isPowered: false,
@@ -64,74 +71,81 @@ const XrayControl = () => {
     }
   };
 
-  // 修改 updateStatus 方法
-
-const updateStatus = async () => {
-  try {
-    const handler = window.chrome?.webview?.hostObjects?.sync?.xrayHandler;
-    if (!handler) throw new Error("XrayHandler not available");
-    const status = await handler.getStatus;
-    const statusData = JSON.parse(status);
-    console.log("Status data:", statusData); // 添加调试日志
-    
-    setXrayState((prev) => ({
-      ...prev,
-      isPowered: statusData.isPowered,
-      isWarmedUp: statusData.isWarmedUp,
-      status: statusData.status, // 确保使用正确的状态字段名
-      voltage: statusData.voltage,
-      current: statusData.current,
-    }));
-  } catch (err) {
-    console.error("Failed to update status:", err);
-    setWarningMessage("Failed to update status");
-    setShowWarning(true);
-  }
-};
-
-const handleVoltageChange = async (newVoltage) => {
-  try {
-    const handler = window.chrome?.webview?.hostObjects?.sync?.xrayHandler;
-    if (!handler) throw new Error("XrayHandler not available");
-    
-    // 参数验证
-    newVoltage = parseInt(newVoltage);
-    if (isNaN(newVoltage) || newVoltage < 0 || newVoltage > 200) {
-      throw new Error("Invalid voltage value (0-200kV)");
+  // updateStatus 方法，添加回调
+  const updateStatus = async () => {
+    try {
+      const handler = window.chrome?.webview?.hostObjects?.sync?.xrayHandler;
+      if (!handler) throw new Error("XrayHandler not available");
+      const status = await handler.getStatus;
+      const statusData = JSON.parse(status);
+      
+      setXrayState((prev) => ({
+        ...prev,
+        isPowered: statusData.isPowered,
+        isWarmedUp: statusData.isWarmedUp,
+        status: statusData.status,
+        voltage: statusData.voltage,
+        current: statusData.current,
+      }));
+      
+      // 通知父组件状态变化
+      onStatusChange?.(statusData.status);
+      
+    } catch (err) {
+      console.error("Failed to update status:", err);
+      setWarningMessage("Failed to update status");
+      setShowWarning(true);
     }
+  };
 
-    // 调用方式修改
-    await handler.setVoltage.Invoke(newVoltage);
-    setXrayState(prev => ({ ...prev, voltage: newVoltage }));
-    await updateStatus();
-  } catch (err) {
-    console.error("Failed to set voltage:", err);
-    setWarningMessage(err.message);
-    setShowWarning(true);
-  }
-};
+  const handleVoltageChange = async (value) => {
+    try {
+      const handler = window.chrome?.webview?.hostObjects?.sync?.xrayHandler;
+      if (!handler) throw new Error("XrayHandler not available");
 
-const handleCurrentChange = async (newCurrent) => {
-  try {
-    const handler = window.chrome?.webview?.hostObjects?.sync?.xrayHandler;
-    if (!handler) throw new Error("XrayHandler not available");
-    
-    // 参数验证
-    newCurrent = parseInt(newCurrent);
-    if (isNaN(newCurrent) || newCurrent < 0 || newCurrent > 500) {
-      throw new Error("Invalid current value (0-500µA)");
+      const newVoltage = parseInt(
+        typeof value === "object" ? value.target.value : value
+      );
+      if (isNaN(newVoltage) || newVoltage < 0 || newVoltage > 200) {
+        throw new Error("Invalid voltage value (0-200kV)");
+      }
+
+      console.log("Setting voltage to:", newVoltage);
+
+      // 改为设置属性（无括号），sync hostObjects 可传递一个参数
+      handler.Voltage = newVoltage;
+
+      await updateStatus();
+      console.log("Voltage set successfully:", newVoltage);
+    } catch (err) {
+      console.error("Failed to set voltage:", err);
+      setWarningMessage(`Failed to set voltage: ${err.message}`);
+      setShowWarning(true);
     }
+  };
 
-    // 调用方式修改
-    await handler.setCurrent.Invoke(newCurrent);
-    setXrayState(prev => ({ ...prev, current: newCurrent }));
-    await updateStatus();
-  } catch (err) {
-    console.error("Failed to set current:", err);
-    setWarningMessage(err.message);
-    setShowWarning(true);
-  }
-};
+  const handleCurrentChange = async (value) => {
+    try {
+      const handler = window.chrome?.webview?.hostObjects?.sync?.xrayHandler;
+      if (!handler) throw new Error("XrayHandler not available");
+
+      const newCurrent = parseInt(
+        typeof value === "object" ? value.target.value : value
+      );
+      if (isNaN(newCurrent) || newCurrent < 0 || newCurrent > 500) {
+        throw new Error("Invalid current value (0-500µA)");
+      }
+
+      // 同理改为属性赋值
+      handler.Current = newCurrent;
+
+      await updateStatus();
+    } catch (err) {
+      console.error("Failed to set current:", err);
+      setWarningMessage(`Failed to set current: ${err.message}`);
+      setShowWarning(true);
+    }
+  };
 
   const handleFocusChange = async (mode) => {
     try {
@@ -278,9 +292,21 @@ const handleCurrentChange = async (newCurrent) => {
                   <div className="flex items-center space-x-2">
                     <input
                       type="number"
+                      min="0"
+                      max="180"
                       value={xrayState.voltage}
-                      onChange={(e) => handleVoltageChange(parseInt(e.target.value))}
-                      className="w-20 p-1 border border-gray-300 rounded"
+                      onChange={(e) => {
+                        const value = parseInt(e.target.value);
+                        if (!isNaN(value)) {
+                          handleVoltageChange(value);
+                        }
+                      }}
+                      disabled={!xrayState.isPowered}
+                      className={`w-20 p-1 border rounded ${
+                        xrayState.isPowered
+                          ? "border-gray-300 bg-white"
+                          : "border-gray-200 bg-gray-100 text-gray-500 cursor-not-allowed"
+                      }`}
                     />
                   </div>
                 </div>
@@ -294,9 +320,16 @@ const handleCurrentChange = async (newCurrent) => {
                     <input
                       type="number"
                       value={xrayState.current}
-                      onChange={(e) => handleCurrentChange(parseInt(e.target.value))}
-                      className="w-20 p-1 border border-gray-300 rounded"
-                    />                
+                      onChange={(e) =>
+                        handleCurrentChange(parseInt(e.target.value))
+                      }
+                      disabled={!xrayState.isPowered}
+                      className={`w-20 p-1 border rounded ${
+                        xrayState.isPowered
+                          ? "border-gray-300 bg-white"
+                          : "border-gray-200 bg-gray-100 text-gray-500 cursor-not-allowed"
+                      }`}
+                    />
                   </div>
                 </div>
               </div>

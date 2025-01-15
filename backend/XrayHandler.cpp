@@ -98,6 +98,62 @@ STDMETHODIMP XrayHandler::Invoke(DISPID dispIdMember, REFIID riid, LCID lcid,
 
     try
     {
+        // 对 PROPERTYPUT（赋值操作）进行处理
+        if (wFlags & DISPATCH_PROPERTYPUT)
+        {
+            switch (dispIdMember)
+            {
+            case 11: // Voltage property
+                OutputDebugString(L"Voltage property PUT called\n");
+                if (!pDispParams || pDispParams->cArgs != 1) {
+                    OutputDebugString(L"Invalid argument count for Voltage property\n");
+                    return E_INVALIDARG;
+                }
+                if (pDispParams->rgvarg[0].vt != VT_I4) {
+                    OutputDebugString(L"Invalid argument type for Voltage property\n");
+                    return E_INVALIDARG;
+                }
+                try {
+                    UINT kV = static_cast<UINT>(pDispParams->rgvarg[0].intVal);
+                    if (kV > 180) {
+                        OutputDebugString(L"Voltage out of range\n");
+                        return E_INVALIDARG;
+                    }
+                    return m_xray->SetkV(kV) ? S_OK : E_FAIL;
+                }
+                catch (...) {
+                    OutputDebugString(L"Exception in Voltage property PUT\n");
+                    return E_FAIL;
+                }
+
+            case 12: // Current property
+                OutputDebugString(L"Current property PUT called\n");
+                if (!pDispParams || pDispParams->cArgs != 1) {
+                    OutputDebugString(L"Invalid argument count for Current property\n");
+                    return E_INVALIDARG;
+                }
+                if (pDispParams->rgvarg[0].vt != VT_I4) {
+                    OutputDebugString(L"Invalid argument type for Current property\n");
+                    return E_INVALIDARG;
+                }
+                try {
+                    UINT uA = static_cast<UINT>(pDispParams->rgvarg[0].intVal);
+                    if (uA > m_xray->GetMaxuA(m_xray->kVSet())) {
+                        OutputDebugString(L"Current out of range\n");
+                        return E_INVALIDARG;
+                    }
+                    return m_xray->SetuA(uA) ? S_OK : E_FAIL;
+                }
+                catch (...) {
+                    OutputDebugString(L"Exception in Current property PUT\n");
+                    return E_FAIL;
+                }
+
+            default:
+                return DISP_E_MEMBERNOTFOUND;
+            }
+        }
+
         switch (dispIdMember)
         {
         case 1: // initialize
@@ -114,8 +170,14 @@ STDMETHODIMP XrayHandler::Invoke(DISPID dispIdMember, REFIID riid, LCID lcid,
 
         case 3: // setVoltage
             OutputDebugString(L"setVoltage called\n");
+
             if (!pDispParams || pDispParams->cArgs != 1) {
-                OutputDebugString(L"Invalid argument count\n");
+                OutputDebugString(L"Args count: ");
+                wchar_t buffer[10];
+                swprintf(buffer, 10, L"%d", pDispParams->cArgs);
+                OutputDebugString(buffer);
+                OutputDebugString(L" Invalid argument count\n");
+
                 return E_INVALIDARG;
             }
             if (pDispParams->rgvarg[0].vt != VT_I4) {
@@ -245,13 +307,12 @@ STDMETHODIMP XrayHandler::GetTypeInfo(UINT iTInfo, LCID lcid, ITypeInfo** ppTInf
     return E_NOTIMPL;
 }
 
-STDMETHODIMP XrayHandler::GetIDsOfNames(REFIID riid, LPOLESTR* rgszNames, UINT cNames,
-    LCID lcid, DISPID* rgDispId)
+STDMETHODIMP XrayHandler::GetIDsOfNames(REFIID riid, LPOLESTR* rgszNames,
+    UINT cNames, LCID lcid, DISPID* rgDispId)
 {
     if (!rgszNames || !rgDispId)
         return E_INVALIDARG;
 
-    // 添加 initialize 方法
     static const struct {
         const wchar_t* name;
         DISPID id;
@@ -264,8 +325,9 @@ STDMETHODIMP XrayHandler::GetIDsOfNames(REFIID riid, LPOLESTR* rgszNames, UINT c
         {L"turnOff", 6},
         {L"setFocus", 7},
         {L"getStatus", 8},
-        {L"getSpotsizeCount", 9},
-        {L"getSpotsize", 10}
+        // 新增属性 "Voltage"
+        {L"Voltage", 11},
+        {L"Current", 12}
     };
 
     OutputDebugString(L"GetIDsOfNames called for: ");
@@ -278,7 +340,6 @@ STDMETHODIMP XrayHandler::GetIDsOfNames(REFIID riid, LPOLESTR* rgszNames, UINT c
             return S_OK;
         }
     }
-
     return DISP_E_UNKNOWNNAME;
 }
 
