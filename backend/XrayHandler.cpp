@@ -56,42 +56,6 @@ XrayHandler::XrayHandler() : m_xray(nullptr), m_hXrayDll(nullptr)
             }
             throw std::runtime_error("Failed to initialize Xray");
         }
-
-        // 测试 CXray 的基本功能
-        OutputDebugString(L"\n=== Testing basic CXray functions ===\n");
-        if (!m_xray->Open())
-        {
-            OutputDebugString(L"Failed to open CXray\n");
-            throw std::runtime_error("Failed to open CXray");
-        }
-
-        // 输出 CXray 的初始状态
-        wchar_t buf[256];
-        swprintf_s(buf, L"CXray State: %d\n", m_xray->State());
-        OutputDebugString(buf);
-        swprintf_s(buf, L"IsCold: %d\n", m_xray->IsCold());
-        OutputDebugString(buf);
-        swprintf_s(buf, L"IsOpen: %d\n", m_xray->IsOpen());
-        OutputDebugString(buf);
-
-        // 测试调用 TurnOn 方法
-        OutputDebugString(L"\n=== Testing TurnOn function ===\n");
-        UINT testVoltage = 100;
-        UINT testCurrent = 200;
-        swprintf_s(buf, L"Attempting TurnOn with voltage=%d, current=%d\n",
-            testVoltage, testCurrent);
-        OutputDebugString(buf);
-
-        // BOOL result = m_xray->TurnOn(testVoltage, testCurrent);
-        BOOL result = m_xray->TurnOn();
-        swprintf_s(buf, L"TurnOn result: %d\n", result);
-        OutputDebugString(buf);
-
-        // 查询电压电流
-        swprintf_s(buf, L"Voltage: %d\n", m_xray->kVSet());
-        OutputDebugString(buf);
-        swprintf_s(buf, L"Current: %d\n", m_xray->uASet());
-        OutputDebugString(buf);
     }
     catch (...)
     {
@@ -150,35 +114,56 @@ STDMETHODIMP XrayHandler::Invoke(DISPID dispIdMember, REFIID riid, LCID lcid,
 
         case 3: // setVoltage
             OutputDebugString(L"setVoltage called\n");
-            if (!pDispParams || pDispParams->cArgs != 1)
+            if (!pDispParams || pDispParams->cArgs != 1) {
+                OutputDebugString(L"Invalid argument count\n");
                 return E_INVALIDARG;
-            if (pDispParams->rgvarg[0].vt != VT_I4)
+            }
+            if (pDispParams->rgvarg[0].vt != VT_I4) {
+                OutputDebugString(L"Invalid argument type\n");
                 return E_INVALIDARG;
-            return m_xray->SetkVuA(pDispParams->rgvarg[0].intVal,
-                m_xray->uASet())
-                ? S_OK
-                : E_FAIL;
+            }
+            try {
+                UINT kV = static_cast<UINT>(pDispParams->rgvarg[0].intVal);
+                if (kV > 180) { // 添加范围检查
+                    OutputDebugString(L"Voltage value out of range\n");
+                    return E_INVALIDARG;
+                }
+                return m_xray->SetkV(kV) ? S_OK : E_FAIL;
+            }
+            catch (...) {
+                OutputDebugString(L"Exception in setVoltage\n");
+                return E_FAIL;
+            }
 
         case 4: // setCurrent
             OutputDebugString(L"setCurrent called\n");
-            if (!pDispParams || pDispParams->cArgs != 1)
+            if (!pDispParams || pDispParams->cArgs != 1) {
+                OutputDebugString(L"Invalid argument count\n");
                 return E_INVALIDARG;
-            if (pDispParams->rgvarg[0].vt != VT_I4)
+            }
+            if (pDispParams->rgvarg[0].vt != VT_I4) {
+                OutputDebugString(L"Invalid argument type\n");
                 return E_INVALIDARG;
-            return m_xray->SetkVuA(m_xray->kVSet(),
-                pDispParams->rgvarg[0].intVal)
-                ? S_OK
-                : E_FAIL;
+            }
+            try {
+                UINT uA = static_cast<UINT>(pDispParams->rgvarg[0].intVal);
+                if (uA > m_xray->GetMaxuA(m_xray->kVSet())) { // 添加范围检查
+                    OutputDebugString(L"Current value out of range\n");
+                    return E_INVALIDARG;
+                }
+                return m_xray->SetuA(uA) ? S_OK : E_FAIL;
+            }
+            catch (...) {
+                OutputDebugString(L"Exception in setCurrent\n");
+                return E_FAIL;
+            }
+
 
         case 5: // turnOn
             OutputDebugString(L"turnOn called\n");
-            if (!m_xray->TurnOn())
-            {
-                OutputDebugString(L"TurnOn failed\n");
-                return E_FAIL;
-            }
-            OutputDebugString(L"TurnOn succeeded\n");
-            return S_OK;
+            result = m_xray->TurnOn();
+            return result ? S_OK : E_FAIL;
+
 
         case 6: // turnOff
             OutputDebugString(L"turnOff called\n");
@@ -198,12 +183,13 @@ STDMETHODIMP XrayHandler::Invoke(DISPID dispIdMember, REFIID riid, LCID lcid,
             OutputDebugString(L"getStatus called\n");
             if (!pVarResult)
                 return E_INVALIDARG;
-            try
-            {
+            try {
                 std::ostringstream json;
                 CXray::XR_STATE state = m_xray->State();
+                const char* stateStr = GetStateString(state);
+
                 json << "{"
-                    << "\"state\":\"" << GetStateString(state) << "\","
+                    << "\"status\":\"" << stateStr << "\","  // 修改这里，确保状态字符串被包含
                     << "\"isPowered\":" << (m_xray->IsBeamOn() ? "true" : "false") << ","
                     << "\"isWarmedUp\":" << (!m_xray->IsCold() ? "true" : "false") << ","
                     << "\"isBeaming\":" << (m_xray->IsBeaming() ? "true" : "false") << ","
@@ -215,10 +201,10 @@ STDMETHODIMP XrayHandler::Invoke(DISPID dispIdMember, REFIID riid, LCID lcid,
                 pVarResult->vt = VT_BSTR;
                 pVarResult->bstrVal = SysAllocString(wstr.c_str());
                 OutputDebugString(L"getStatus succeeded\n");
+                OutputDebugString(wstr.c_str());  // 添加调试输出
                 return S_OK;
             }
-            catch (...)
-            {
+            catch (...) {
                 OutputDebugString(L"getStatus failed\n");
                 return E_FAIL;
             }
@@ -271,7 +257,7 @@ STDMETHODIMP XrayHandler::GetIDsOfNames(REFIID riid, LPOLESTR* rgszNames, UINT c
         DISPID id;
     } methods[] = {
         {L"initialize", 1},
-        {L"startWarmup", 2}, 
+        {L"startWarmup", 2},
         {L"setVoltage", 3},
         {L"setCurrent", 4},
         {L"turnOn", 5},

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { Radiation, AlertTriangle, ChevronUp, ChevronDown } from "lucide-react";
+import { Radiation, AlertTriangle, ChevronUp, ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
 
 const DEBUG = true;
 
@@ -29,105 +29,124 @@ const XrayControl = () => {
   const [spotSizes, setSpotSizes] = useState([]);
 
   // 初始化时获取焦点模式
-  // useEffect(() => {
-  //   const initSpotSizes = async () => {
-  //     const count = await callXrayHandler("getSpotsizeCount");
-  //     setSpotSizes(Array.from({ length: count }, (_, i) => i));
-  //   };
-  //   initSpotSizes();
-  // }, []);
-
-  // XrayControl.jsx 修改 callXrayHandler:
-  // ...existing code...
-
-  const callXrayHandler = async (method, ...args) => {
-    try {
+  useEffect(() => {
+    const initSpotSizes = async () => {
+      try {
         const handler = window.chrome?.webview?.hostObjects?.sync?.xrayHandler;
-        if (!handler) {
-            throw new Error("XrayHandler not available");
-        }
-
-        // 直接调用方法
-        const result = await handler[method];
-        console.log(`${method} result:`, result);
-        return result;
-    } catch (err) {
-        console.error(`Error in callXrayHandler(${method}):`, err);
-        throw err;
-    }
-};
-
-const handlePowerToggle = async () => {
-    try {
-        const handler = window.chrome?.webview?.hostObjects?.sync?.xrayHandler;
-        if (!handler) {
-            throw new Error("XrayHandler not available");
-        }
-
-        if (!xrayState.isPowered) {
-            await handler.turnOn;  // 直接访问属性
-        } else {
-            await handler.turnOff;
-        }
-        await updateStatus();
-    } catch (err) {
-        console.error("Power toggle failed:", err);
-        setWarningMessage(err.message);
+        if (!handler) throw new Error("XrayHandler not available");
+        const count = await handler.getSpotsizeCount;
+        setSpotSizes(Array.from({ length: count }, (_, i) => i));
+      } catch (err) {
+        console.error("Failed to get spot sizes:", err);
+        setWarningMessage("Failed to initialize spot sizes");
         setShowWarning(true);
+      }
+    };
+    initSpotSizes();
+    updateStatus(); // 初始化时更新状态
+  }, []);
+
+  const handlePowerToggle = async () => {
+    try {
+      const handler = window.chrome?.webview?.hostObjects?.sync?.xrayHandler;
+      if (!handler) throw new Error("XrayHandler not available");
+
+      if (!xrayState.isPowered) {
+        await handler.turnOn;
+      } else {
+        await handler.turnOff;
+      }
+      await updateStatus();
+    } catch (err) {
+      console.error("Power toggle failed:", err);
+      setWarningMessage(err.message);
+      setShowWarning(true);
     }
+  };
+
+  // 修改 updateStatus 方法
+
+const updateStatus = async () => {
+  try {
+    const handler = window.chrome?.webview?.hostObjects?.sync?.xrayHandler;
+    if (!handler) throw new Error("XrayHandler not available");
+    const status = await handler.getStatus;
+    const statusData = JSON.parse(status);
+    console.log("Status data:", statusData); // 添加调试日志
+    
+    setXrayState((prev) => ({
+      ...prev,
+      isPowered: statusData.isPowered,
+      isWarmedUp: statusData.isWarmedUp,
+      status: statusData.status, // 确保使用正确的状态字段名
+      voltage: statusData.voltage,
+      current: statusData.current,
+    }));
+  } catch (err) {
+    console.error("Failed to update status:", err);
+    setWarningMessage("Failed to update status");
+    setShowWarning(true);
+  }
 };
 
-  // 电压和电流从状态更新中获取
-  const updateStatus = async () => {
-    try {
-      const status = await callXrayHandler("getStatus");
-      const statusData = JSON.parse(status);
-      setXrayState((prev) => ({
-        ...prev,
-        isPowered: statusData.isPowered,
-        isWarmedUp: statusData.isWarmedUp,
-        status: statusData.status,
-        voltage: statusData.voltage, // 从状态更新中获取实际值
-        current: statusData.current, // 从状态更新中获取实际值
-      }));
-    } catch (err) {
-      console.error("Failed to update status:", err);
+const handleVoltageChange = async (newVoltage) => {
+  try {
+    const handler = window.chrome?.webview?.hostObjects?.sync?.xrayHandler;
+    if (!handler) throw new Error("XrayHandler not available");
+    
+    // 参数验证
+    newVoltage = parseInt(newVoltage);
+    if (isNaN(newVoltage) || newVoltage < 0 || newVoltage > 200) {
+      throw new Error("Invalid voltage value (0-200kV)");
     }
-  };
 
-  // 处理电压改变
-  const handleVoltageChange = async (e) => {
-    const newVoltage = parseInt(e.target.value);
-    try {
-      await callXrayHandler("setVoltage", newVoltage);
-      setXrayState((prev) => ({ ...prev, voltage: newVoltage }));
-    } catch (err) {
-      console.error("Failed to set voltage:", err);
+    // 调用方式修改
+    await handler.setVoltage.Invoke(newVoltage);
+    setXrayState(prev => ({ ...prev, voltage: newVoltage }));
+    await updateStatus();
+  } catch (err) {
+    console.error("Failed to set voltage:", err);
+    setWarningMessage(err.message);
+    setShowWarning(true);
+  }
+};
+
+const handleCurrentChange = async (newCurrent) => {
+  try {
+    const handler = window.chrome?.webview?.hostObjects?.sync?.xrayHandler;
+    if (!handler) throw new Error("XrayHandler not available");
+    
+    // 参数验证
+    newCurrent = parseInt(newCurrent);
+    if (isNaN(newCurrent) || newCurrent < 0 || newCurrent > 500) {
+      throw new Error("Invalid current value (0-500µA)");
     }
-  };
 
-  // 处理电流改变
-  const handleCurrentChange = async (e) => {
-    const newCurrent = parseInt(e.target.value);
-    try {
-      await callXrayHandler("setCurrent", newCurrent);
-      setXrayState((prev) => ({ ...prev, current: newCurrent }));
-    } catch (err) {
-      console.error("Failed to set current:", err);
-    }
-  };
+    // 调用方式修改
+    await handler.setCurrent.Invoke(newCurrent);
+    setXrayState(prev => ({ ...prev, current: newCurrent }));
+    await updateStatus();
+  } catch (err) {
+    console.error("Failed to set current:", err);
+    setWarningMessage(err.message);
+    setShowWarning(true);
+  }
+};
 
-  // 处理聚焦模式改变
   const handleFocusChange = async (mode) => {
     try {
-      await callXrayHandler("setFocus", mode);
+      const handler = window.chrome?.webview?.hostObjects?.sync?.xrayHandler;
+      if (!handler) throw new Error("XrayHandler not available");
+      await handler.setFocus(mode);
       setXrayState((prev) => ({ ...prev, focus: mode }));
+      await updateStatus();
     } catch (err) {
       console.error("Failed to set focus mode:", err);
+      setWarningMessage(err.message);
+      setShowWarning(true);
     }
   };
 
-  // 拖拽相关处理函数
   const handleDragStart = (e) => {
     setIsDragging(true);
     setDragStart({
@@ -154,12 +173,10 @@ const handlePowerToggle = async () => {
     setIsDragging(false);
   };
 
-  // 计算功率
   const calculatePower = () => {
     return ((xrayState.voltage * xrayState.current) / 1000).toFixed(2);
   };
 
-  // 处理拖拽事件监听
   useEffect(() => {
     if (isDragging) {
       window.addEventListener("mousemove", handleDrag);
@@ -256,29 +273,31 @@ const handlePowerToggle = async () => {
             <div className="space-y-4">
               {/* Voltage Display */}
               <div className="space-y-2">
-                <div className="flex justify-between">
+                <div className="flex justify-between items-center">
                   <label className="text-sm font-medium">Voltage (kV)</label>
-                  <span className="text-sm">{xrayState.voltage} kV</span>
-                </div>
-                <div className="w-full h-2 bg-gray-200 rounded">
-                  <div
-                    className="h-full bg-blue-500 rounded"
-                    style={{ width: `${(xrayState.voltage / 200) * 100}%` }}
-                  />
+                  <div className="flex items-center space-x-2">
+                    <input
+                      type="number"
+                      value={xrayState.voltage}
+                      onChange={(e) => handleVoltageChange(parseInt(e.target.value))}
+                      className="w-20 p-1 border border-gray-300 rounded"
+                    />
+                  </div>
                 </div>
               </div>
 
               {/* Current Display */}
               <div className="space-y-2">
-                <div className="flex justify-between">
+                <div className="flex justify-between items-center">
                   <label className="text-sm font-medium">Current (µA)</label>
-                  <span className="text-sm">{xrayState.current} µA</span>
-                </div>
-                <div className="w-full h-2 bg-gray-200 rounded">
-                  <div
-                    className="h-full bg-blue-500 rounded"
-                    style={{ width: `${(xrayState.current / 500) * 100}%` }}
-                  />
+                  <div className="flex items-center space-x-2">
+                    <input
+                      type="number"
+                      value={xrayState.current}
+                      onChange={(e) => handleCurrentChange(parseInt(e.target.value))}
+                      className="w-20 p-1 border border-gray-300 rounded"
+                    />                
+                  </div>
                 </div>
               </div>
 
