@@ -4,6 +4,7 @@
 #include <wil/com.h>
 #include <WebView2.h>
 #include "XrayHandler.h"
+#include "CncHandler.h"
 #include <ShellScalingApi.h>
 
 using namespace Microsoft::WRL;
@@ -172,6 +173,18 @@ void InitializeWebView2(HWND hWnd) {
                                 catch (...) {
                                     OutputDebugString(L"Unknown exception during XrayHandler creation\n");
                                     return E_FAIL;
+                                }
+
+
+                                // 注册 CncHandler
+                                ComPtr<CncHandler> cncHandler = Microsoft::WRL::Make<CncHandler>();
+                                if (cncHandler) {
+                                    VARIANT var;
+                                    VariantInit(&var);
+                                    var.vt = VT_DISPATCH;
+                                    var.pdispVal = cncHandler.Get();
+                                    webViewWindow->AddHostObjectToScript(L"cncHandler", &var);
+                                    VariantClear(&var);
                                 }
 
                                 // 设置窗口大小
