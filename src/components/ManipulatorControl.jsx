@@ -38,7 +38,7 @@ const ManipulatorControl = () => {
 
   // Get handler reference
   const getHandler = () => {
-    return window.chrome?.webview?.hostObjects?.sync?.deviceHandler;
+    return window.chrome?.webview?.hostObjects?.deviceHandler;
   };
 
   // Initialize CNC and get axis configuration
@@ -119,7 +119,7 @@ const ManipulatorControl = () => {
       }));
 
       // Start reference - dispId 102
-      await handler.startReference(ALL_AXIS);
+      await handler.startReference;
       await updateStatus();
 
       setError(null);
@@ -215,11 +215,11 @@ const ManipulatorControl = () => {
     }
   };
 
-  // Periodic status update
-  useEffect(() => {
-    const interval = setInterval(updateStatus, 1000);
-    return () => clearInterval(interval);
-  }, []);
+  // // 定期更新状态
+  // useEffect(() => {
+  //   const interval = setInterval(updateStatus, 1000);
+  //   return () => clearInterval(interval);
+  // }, []);
 
   return (
     <div className="p-4 bg-gray-100 rounded-lg space-y-4">

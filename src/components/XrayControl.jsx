@@ -1,10 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import {
-  Radiation,
-  AlertTriangle,
-  ChevronUp,
-  ChevronDown,
-} from "lucide-react";
+import { Radiation, AlertTriangle, ChevronUp, ChevronDown } from "lucide-react";
 import PropTypes from "prop-types";
 
 const DEBUG = true;
@@ -33,9 +28,9 @@ const XrayControl = ({ onStatusChange }) => {
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const [isCollapsed, setIsCollapsed] = useState(false);
 
-  // 获取handler引用
+  // 获取handler引用，异步调用
   const getHandler = () => {
-    return window.chrome?.webview?.hostObjects?.sync?.deviceHandler;
+    return window.chrome?.webview?.hostObjects?.deviceHandler;
   };
 
   // 初始化
@@ -47,7 +42,7 @@ const XrayControl = ({ onStatusChange }) => {
 
         // Initialize Xray - dispId 1
         await handler.initializeXray;
-        
+
         // 获取状态
         await updateStatus();
 
@@ -55,7 +50,7 @@ const XrayControl = ({ onStatusChange }) => {
       } catch (err) {
         console.error("Failed to initialize Xray:", err);
         setWarningMessage(err.message);
-        setShowWarning(true); 
+        setShowWarning(true);
       }
     };
 
@@ -77,15 +72,14 @@ const XrayControl = ({ onStatusChange }) => {
       setXrayState((prev) => ({
         ...prev,
         isPowered: statusData.isPowered,
-        isWarmedUp: statusData.isWarmedUp, 
+        isWarmedUp: statusData.isWarmedUp,
         voltage: statusData.voltage,
         current: statusData.current,
         status: statusData.status,
-        focus: statusData.focus
+        focus: statusData.focus,
       }));
 
       onStatusChange?.(statusData.status);
-
     } catch (err) {
       console.error("Failed to update status:", err);
       setWarningMessage(err.message);
@@ -93,7 +87,7 @@ const XrayControl = ({ onStatusChange }) => {
     }
   };
 
-  // 处理电压改变 
+  // 处理电压改变
   const handleVoltageChange = async (value) => {
     try {
       const handler = getHandler();
@@ -103,15 +97,14 @@ const XrayControl = ({ onStatusChange }) => {
         typeof value === "object" ? value.target.value : value
       );
 
-      if (isNaN(newVoltage) || newVoltage < 0 || newVoltage > 200) {
-        throw new Error("Invalid voltage value (0-200kV)");
+      if (isNaN(newVoltage) || newVoltage < 0 || newVoltage > 180) {
+        throw new Error("Invalid voltage value (0-180)");
       }
 
-      // setVoltage - dispId 3
-      await handler.setVoltage(newVoltage);
-      
-      await updateStatus();
+      // 使用属性设置方式而不是方法调用
+      handler.Voltage = newVoltage;
 
+      await updateStatus();
     } catch (err) {
       console.error("Failed to set voltage:", err);
       setWarningMessage(err.message);
@@ -133,11 +126,10 @@ const XrayControl = ({ onStatusChange }) => {
         throw new Error("Invalid current value (0-500µA)");
       }
 
-      // setCurrent - dispId 4
-      await handler.setCurrent(newCurrent);
-      
-      await updateStatus();
+      handler.Current = newCurrent;
 
+
+      await updateStatus();
     } catch (err) {
       console.error("Failed to set current:", err);
       setWarningMessage(err.message);
@@ -160,7 +152,6 @@ const XrayControl = ({ onStatusChange }) => {
       }
 
       await updateStatus();
-
     } catch (err) {
       console.error("Power toggle failed:", err);
       setWarningMessage(err.message);
@@ -176,9 +167,8 @@ const XrayControl = ({ onStatusChange }) => {
 
       // setFocus - dispId 7
       await handler.setFocus(mode);
-      
-      await updateStatus();
 
+      await updateStatus();
     } catch (err) {
       console.error("Failed to set focus mode:", err);
       setWarningMessage(err.message);
@@ -230,11 +220,11 @@ const XrayControl = ({ onStatusChange }) => {
     };
   }, [isDragging, handleDrag]);
 
-  // 定期更新状态
-  useEffect(() => {
-    const interval = setInterval(updateStatus, 1000);
-    return () => clearInterval(interval);
-  }, []);
+  // // 定期更新状态
+  // useEffect(() => {
+  //   const interval = setInterval(updateStatus, 1000);
+  //   return () => clearInterval(interval);
+  // }, []);
 
   return (
     <>
@@ -354,7 +344,9 @@ const XrayControl = ({ onStatusChange }) => {
                     <input
                       type="number"
                       value={xrayState.current}
-                      onChange={(e) => handleCurrentChange(parseInt(e.target.value))}
+                      onChange={(e) =>
+                        handleCurrentChange(parseInt(e.target.value))
+                      }
                       disabled={!xrayState.isPowered}
                       className={`w-20 p-1 border rounded ${
                         xrayState.isPowered

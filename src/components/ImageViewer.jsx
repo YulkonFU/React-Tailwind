@@ -133,14 +133,14 @@ const ImageViewer = forwardRef(
           }
         } catch (error) {
           console.error("Error initializing PixiJS:", error);
-          if (!initializationTimeout.current) {
-            console.log("Scheduling retry...");
-            initializationTimeout.current = setTimeout(() => {
-              console.log("Retrying initialization...");
-              initializationTimeout.current = null;
-              initPixiApp();
-            }, 1000);
-          }
+          // if (!initializationTimeout.current) {
+          //   console.log("Scheduling retry...");
+          //   initializationTimeout.current = setTimeout(() => {
+          //     console.log("Retrying initialization...");
+          //     initializationTimeout.current = null;
+          //     initPixiApp();
+          //   }, 1000);
+          // }
         }
       };
 
