@@ -1,39 +1,35 @@
-﻿#pragma once
+#pragma once
 
 #include <windows.h>
 #include <WebView2.h>
 #include <wrl.h>
 #include <string>
 #include "Xray.h"
+#include "Cnc.h"
 
-// Debug 日志宏
-#ifdef _DEBUG
-#define LOG_DEBUG(msg, ...) { \
-    wchar_t buf[1024]; \
-    swprintf_s(buf, L"[DEBUG] " msg L"\n", __VA_ARGS__); \
-    OutputDebugString(buf); \
-}
-#else
-#define LOG_DEBUG(msg, ...) 
-#endif
-
-// 前向声明以避免包含 Xray.h
-class CXray;
-
-class XrayHandler : public Microsoft::WRL::RuntimeClass<
+class DeviceHandler : public Microsoft::WRL::RuntimeClass<
     Microsoft::WRL::RuntimeClassFlags<Microsoft::WRL::ClassicCom>,
     IDispatch> {
-private:
-    CXray* m_xray;
-    HMODULE m_hXrayDll;
-    bool LoadXrayDll();
-    void UnloadXrayDll();
 
+private:
+    // Device instances
+    CXray* m_xray;
+    CCnc* m_cnc;
+
+    // DLL handles  
+    HMODULE m_hXrayDll;
+    HMODULE m_hCncDll;
+
+    // Helper methods
+    bool LoadXrayDll();
+    bool LoadCncDll();
+    void UnloadXrayDll();
+    void UnloadCncDll();
     std::wstring ConvertToWString(const std::string& str);
 
 public:
-    XrayHandler();
-    ~XrayHandler();
+    DeviceHandler();
+    ~DeviceHandler();
 
     // IDispatch Methods
     STDMETHOD(GetTypeInfoCount)(UINT* pctinfo) override;
@@ -44,16 +40,23 @@ public:
         WORD wFlags, DISPPARAMS* pDispParams, VARIANT* pVarResult,
         EXCEPINFO* pExcepInfo, UINT* puArgErr) override;
 
-    // Control Methods
-    HRESULT Initialize();
+    // Xray Control Methods
+    HRESULT InitializeXray();
     HRESULT SetVoltage(int kV);
     HRESULT SetCurrent(int uA);
     HRESULT SetFocus(int mode);
-    HRESULT TurnOn();
-    HRESULT TurnOff();
-    HRESULT GetStatus(VARIANT* pResult);
-    HRESULT GetSpotsizeCount(); // 获取支持的焦点模式数量
-    HRESULT GetSpotsize(); // 获取当前焦点模式
+    HRESULT TurnXrayOn();
+    HRESULT TurnXrayOff();
+    HRESULT GetXrayStatus(VARIANT* pResult);
 
-
+    // CNC Control Methods
+    HRESULT InitializeCnc();
+    HRESULT StartReference(int axisIndex = -1);
+    HRESULT MoveAxis(int axisIndex, double position);
+    HRESULT MoveAllAxes(double positions[]);
+    HRESULT Stop(int axisIndex = -1);
+    HRESULT EnableJoy(int axisIndex = -1, bool enable = true);
+    HRESULT GetCncStatus(VARIANT* pResult);
+    HRESULT GetAxesInfo(VARIANT* pResult);
+    HRESULT GetPositions(VARIANT* pResult);
 };

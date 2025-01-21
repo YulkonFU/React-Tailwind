@@ -3,8 +3,7 @@
 #include <wrl.h>
 #include <wil/com.h>
 #include <WebView2.h>
-#include "XrayHandler.h"
-#include "CncHandler.h"
+#include "DeviceHandler.h"  // 替换原有的Handler头文件
 #include <ShellScalingApi.h>
 
 using namespace Microsoft::WRL;
@@ -19,7 +18,7 @@ WCHAR szWindowClass[MAX_LOADSTRING];
 // WebView2 Globals
 wil::com_ptr<ICoreWebView2Controller> webViewController;
 wil::com_ptr<ICoreWebView2> webViewWindow;
-ComPtr<XrayHandler> xrayHandler;
+ComPtr<DeviceHandler> deviceHandler;  // 替换为单一的deviceHandler
 
 // Function declarations
 ATOM                MyRegisterClass(HINSTANCE hInstance);
@@ -55,6 +54,12 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
         return FALSE;
     }
 
+    // 添加这个检查
+    if (!webViewController || !webViewWindow) {
+        OutputDebugString(L"WebView2 初始化失败。\n");
+        return FALSE;
+    }
+
     HACCEL hAccelTable = LoadAccelerators(hInstance, MAKEINTRESOURCE(IDC_WEBVIEWREACT));
 
     MSG msg;
@@ -67,10 +72,10 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
         }
     }
 
-    // Cleanup
+    // 修改cleanup部分
     webViewController = nullptr;
     webViewWindow = nullptr;
-    xrayHandler = nullptr;
+    deviceHandler = nullptr;  // 替换原有的handlers
 
     CoUninitialize();
     return (int)msg.wParam;
@@ -139,7 +144,7 @@ void InitializeWebView2(HWND hWnd) {
                                 webViewController = controller;
                                 webViewController->get_CoreWebView2(&webViewWindow);
 
-                                // 设置 WebView2 选项
+                                // 设置 WebView2 选项 
                                 ICoreWebView2Settings* settings;
                                 webViewWindow->get_Settings(&settings);
                                 settings->put_IsScriptEnabled(TRUE);
@@ -147,23 +152,23 @@ void InitializeWebView2(HWND hWnd) {
                                 settings->put_IsWebMessageEnabled(TRUE);
                                 settings->put_AreDevToolsEnabled(TRUE);
 
-                                // 注册 XrayHandler
+                                // 注册 DeviceHandler
                                 try {
-                                    xrayHandler = Microsoft::WRL::Make<XrayHandler>();
-                                    if (xrayHandler && webViewWindow) {
+                                    deviceHandler = Microsoft::WRL::Make<DeviceHandler>();
+                                    if (deviceHandler && webViewWindow) {
                                         VARIANT var;
                                         VariantInit(&var);
                                         var.vt = VT_DISPATCH;
-                                        var.pdispVal = xrayHandler.Get();
+                                        var.pdispVal = deviceHandler.Get();
 
                                         // 添加为同步对象
-                                        HRESULT hr = webViewWindow->AddHostObjectToScript(L"xrayHandler", &var);
+                                        HRESULT hr = webViewWindow->AddHostObjectToScript(L"deviceHandler", &var);
                                         if (FAILED(hr)) {
-                                            OutputDebugString(L"Failed to register xrayHandler\n");
+                                            OutputDebugString(L"Failed to register deviceHandler\n");
                                             return hr;
                                         }
                                         VariantClear(&var);
-                                        OutputDebugString(L"Successfully registered xrayHandler\n");
+                                        OutputDebugString(L"Successfully registered deviceHandler\n");
                                     }
                                 }
                                 catch (const std::exception& e) {
@@ -171,20 +176,8 @@ void InitializeWebView2(HWND hWnd) {
                                     return E_FAIL;
                                 }
                                 catch (...) {
-                                    OutputDebugString(L"Unknown exception during XrayHandler creation\n");
+                                    OutputDebugString(L"Unknown exception during DeviceHandler creation\n");
                                     return E_FAIL;
-                                }
-
-
-                                // 注册 CncHandler
-                                ComPtr<CncHandler> cncHandler = Microsoft::WRL::Make<CncHandler>();
-                                if (cncHandler) {
-                                    VARIANT var;
-                                    VariantInit(&var);
-                                    var.vt = VT_DISPATCH;
-                                    var.pdispVal = cncHandler.Get();
-                                    webViewWindow->AddHostObjectToScript(L"cncHandler", &var);
-                                    VariantClear(&var);
                                 }
 
                                 // 设置窗口大小
@@ -200,6 +193,7 @@ void InitializeWebView2(HWND hWnd) {
                 return S_OK;
             }).Get());
 }
+
 
 LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
