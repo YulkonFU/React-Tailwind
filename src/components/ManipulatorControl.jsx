@@ -16,10 +16,10 @@ function log(...args) {
   }
 }
 
-const ALL_AXIS = -1; // 所有轴
+const ALL_AXIS = -1; // Common constant for all axes
 
 const ManipulatorControl = () => {
-  // 状态管理
+  // State management
   const [manipulatorState, setManipulatorState] = useState({
     status: "CNC_NOT_READY",
     isJoyEnabled: false,
@@ -28,7 +28,7 @@ const ManipulatorControl = () => {
     isReferencing: false,
     axisCount: 0,
     currentPositions: [],
-    axisNames: [], // 存储轴名称
+    axisNames: [],
   });
 
   const [showAxisPanel, setShowAxisPanel] = useState(true);
@@ -36,22 +36,27 @@ const ManipulatorControl = () => {
   const [moveValue, setMoveValue] = useState("");
   const [error, setError] = useState(null);
 
-  // 初始化时获取轴配置信息
+  // Get handler reference
+  const getHandler = () => {
+    return window.chrome?.webview?.hostObjects?.sync?.deviceHandler;
+  };
+
+  // Initialize CNC and get axis configuration
   useEffect(() => {
     const initializeCnc = async () => {
       try {
-        const handler = window.chrome?.webview?.hostObjects?.sync?.cncHandler;
-        if (!handler) throw new Error("CncHandler not available");
+        const handler = getHandler();
+        if (!handler) throw new Error("Device handler not available");
 
-        // 初始化CNC
-        await handler.initialize;
+        // Initialize CNC - dispId 101
+        await handler.initializeCnc;
         log("CNC initialized");
         
-        // 获取轴配置信息
+        // Get axis info - dispId 108
         const axesInfo = JSON.parse(await handler.getAxesInfo);
         log("Axes info:", axesInfo);
 
-        // 更新状态
+        // Update state
         setManipulatorState(prev => ({
           ...prev,
           axisCount: axesInfo.axisCount,
@@ -59,7 +64,6 @@ const ManipulatorControl = () => {
           axisNames: axesInfo.axes.map(axis => axis.name)
         }));
 
-        // 获取初始状态
         await updateStatus();
 
       } catch (err) {
@@ -71,17 +75,17 @@ const ManipulatorControl = () => {
     initializeCnc();
   }, []);
 
-  // 更新状态
+  // Update status
   const updateStatus = async () => {
     try {
-      const handler = window.chrome?.webview?.hostObjects?.sync?.cncHandler;
-      if (!handler) throw new Error("CncHandler not available");
+      const handler = getHandler();
+      if (!handler) throw new Error("Device handler not available");
 
-      // 获取状态
-      const status = JSON.parse(await handler.getStatus);
+      // Get status - dispId 107
+      const status = JSON.parse(await handler.getCncStatus);
       log("CNC status:", status);
 
-      // 获取当前位置
+      // Get positions - dispId 109
       const positions = JSON.parse(await handler.getPositions);
       log("Current positions:", positions);
 
@@ -102,11 +106,11 @@ const ManipulatorControl = () => {
     }
   };
 
-  // 处理参考点操作
+  // Handle reference operation
   const handleReference = async () => {
     try {
-      const handler = window.chrome?.webview?.hostObjects?.sync?.cncHandler;
-      if (!handler) throw new Error("CncHandler not available");
+      const handler = getHandler();
+      if (!handler) throw new Error("Device handler not available");
 
       setManipulatorState(prev => ({
         ...prev,
@@ -114,6 +118,7 @@ const ManipulatorControl = () => {
         status: "CNC_DRIVING_REF"
       }));
 
+      // Start reference - dispId 102
       await handler.startReference(ALL_AXIS);
       await updateStatus();
 
@@ -130,30 +135,28 @@ const ManipulatorControl = () => {
     }
   };
 
-  // 处理单轴点击
+  // Handle axis click
   const handleAxisClick = (index) => {
     setEditingAxis(index);
     setMoveValue("");
     setError(null);
   };
 
-  // 处理移动操作
+  // Handle move operation
   const handleMove = async () => {
     if (editingAxis === null || moveValue === "") return;
 
     try {
-      const handler = window.chrome?.webview?.hostObjects?.sync?.cncHandler;
-      if (!handler) throw new Error("CncHandler not available");
+      const handler = getHandler();
+      if (!handler) throw new Error("Device handler not available");
 
       const moveVal = parseFloat(moveValue);
       if (isNaN(moveVal)) {
         throw new Error("Invalid move value");
       }
 
-      // 移动单轴到指定位置
+      // Move axis - dispId 103
       await handler.moveAxis(editingAxis, moveVal);
-
-      // 更新状态
       await updateStatus();
 
       setEditingAxis(null);
@@ -166,12 +169,13 @@ const ManipulatorControl = () => {
     }
   };
 
-  // 处理停止操作
+  // Handle stop operation
   const handleStop = async () => {
     try {
-      const handler = window.chrome?.webview?.hostObjects?.sync?.cncHandler;
-      if (!handler) throw new Error("CncHandler not available");
+      const handler = getHandler();
+      if (!handler) throw new Error("Device handler not available");
 
+      // Stop - dispId 105
       await handler.stop(ALL_AXIS);
       await updateStatus();
 
@@ -185,13 +189,13 @@ const ManipulatorControl = () => {
     }
   };
 
-  // 处理手柄使能
+  // Handle joystick toggle
   const handleJoystickToggle = async () => {
     try {
-      const handler = window.chrome?.webview?.hostObjects?.sync?.cncHandler;
-      if (!handler) throw new Error("CncHandler not available");
+      const handler = getHandler();
+      if (!handler) throw new Error("Device handler not available");
 
-      // 切换手柄状态
+      // Enable/disable joy - dispId 106
       await handler.enableJoy(ALL_AXIS, !manipulatorState.isJoyEnabled);
       await updateStatus();
       
@@ -203,7 +207,7 @@ const ManipulatorControl = () => {
     }
   };
 
-  // 输入值验证
+  // Validate input value
   const handleMoveValueChange = (value) => {
     if (/^[+-]?\d*\.?\d*$/.test(value)) {
       setMoveValue(value);
@@ -211,7 +215,7 @@ const ManipulatorControl = () => {
     }
   };
 
-  // 定期更新状态
+  // Periodic status update
   useEffect(() => {
     const interval = setInterval(updateStatus, 1000);
     return () => clearInterval(interval);

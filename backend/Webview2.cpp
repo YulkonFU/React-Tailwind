@@ -54,11 +54,11 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
         return FALSE;
     }
 
-    // 添加这个检查
-    if (!webViewController || !webViewWindow) {
-        OutputDebugString(L"WebView2 初始化失败。\n");
-        return FALSE;
-    }
+    //// 添加这个检查
+    //if (!webViewController || !webViewWindow) {
+    //    OutputDebugString(L"WebView2 初始化失败。\n");
+    //    return FALSE;
+    //}
 
     HACCEL hAccelTable = LoadAccelerators(hInstance, MAKEINTRESOURCE(IDC_WEBVIEWREACT));
 
@@ -131,68 +131,78 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 }
 
 void InitializeWebView2(HWND hWnd) {
-    CreateCoreWebView2EnvironmentWithOptions(nullptr, nullptr, nullptr,
+    HRESULT hr = CreateCoreWebView2EnvironmentWithOptions(nullptr, nullptr, nullptr,
         Callback<ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler>(
             [hWnd](HRESULT result, ICoreWebView2Environment* env) -> HRESULT
             {
-                if (!env) return E_FAIL;
+                if (FAILED(result) || !env) {
+                    OutputDebugString(L"Failed to create WebView2 environment\n");
+                    return result;
+                }
                 env->CreateCoreWebView2Controller(hWnd,
                     Callback<ICoreWebView2CreateCoreWebView2ControllerCompletedHandler>(
                         [hWnd](HRESULT result, ICoreWebView2Controller* controller) -> HRESULT
                         {
-                            if (controller) {
-                                webViewController = controller;
-                                webViewController->get_CoreWebView2(&webViewWindow);
-
-                                // 设置 WebView2 选项 
-                                ICoreWebView2Settings* settings;
-                                webViewWindow->get_Settings(&settings);
-                                settings->put_IsScriptEnabled(TRUE);
-                                settings->put_AreDefaultScriptDialogsEnabled(TRUE);
-                                settings->put_IsWebMessageEnabled(TRUE);
-                                settings->put_AreDevToolsEnabled(TRUE);
-
-                                // 注册 DeviceHandler
-                                try {
-                                    deviceHandler = Microsoft::WRL::Make<DeviceHandler>();
-                                    if (deviceHandler && webViewWindow) {
-                                        VARIANT var;
-                                        VariantInit(&var);
-                                        var.vt = VT_DISPATCH;
-                                        var.pdispVal = deviceHandler.Get();
-
-                                        // 添加为同步对象
-                                        HRESULT hr = webViewWindow->AddHostObjectToScript(L"deviceHandler", &var);
-                                        if (FAILED(hr)) {
-                                            OutputDebugString(L"Failed to register deviceHandler\n");
-                                            return hr;
-                                        }
-                                        VariantClear(&var);
-                                        OutputDebugString(L"Successfully registered deviceHandler\n");
-                                    }
-                                }
-                                catch (const std::exception& e) {
-                                    OutputDebugStringA(e.what());
-                                    return E_FAIL;
-                                }
-                                catch (...) {
-                                    OutputDebugString(L"Unknown exception during DeviceHandler creation\n");
-                                    return E_FAIL;
-                                }
-
-                                // 设置窗口大小
-                                RECT bounds;
-                                GetClientRect(hWnd, &bounds);
-                                controller->put_Bounds(bounds);
-
-                                // 导航到本地页面
-                                webViewWindow->Navigate(L"http://localhost:5173/");
+                            if (FAILED(result) || !controller) {
+                                OutputDebugString(L"Failed to create WebView2 controller\n");
+                                return result;
                             }
+                            webViewController = controller;
+                            webViewController->get_CoreWebView2(&webViewWindow);
+
+                            // 设置 WebView2 选项 
+                            ICoreWebView2Settings* settings;
+                            webViewWindow->get_Settings(&settings);
+                            settings->put_IsScriptEnabled(TRUE);
+                            settings->put_AreDefaultScriptDialogsEnabled(TRUE);
+                            settings->put_IsWebMessageEnabled(TRUE);
+                            settings->put_AreDevToolsEnabled(TRUE);
+
+                            // 注册 DeviceHandler
+                            try {
+                                deviceHandler = Microsoft::WRL::Make<DeviceHandler>();
+                                if (deviceHandler && webViewWindow) {
+                                    VARIANT var;
+                                    VariantInit(&var);
+                                    var.vt = VT_DISPATCH;
+                                    var.pdispVal = deviceHandler.Get();
+
+                                    // 添加为同步对象
+                                    HRESULT hr = webViewWindow->AddHostObjectToScript(L"deviceHandler", &var);
+                                    if (FAILED(hr)) {
+                                        OutputDebugString(L"Failed to register deviceHandler\n");
+                                        return hr;
+                                    }
+                                    VariantClear(&var);
+                                    OutputDebugString(L"Successfully registered deviceHandler\n");
+                                }
+                            }
+                            catch (const std::exception& e) {
+                                OutputDebugStringA(e.what());
+                                return E_FAIL;
+                            }
+                            catch (...) {
+                                OutputDebugString(L"Unknown exception during DeviceHandler creation\n");
+                                return E_FAIL;
+                            }
+
+                            // 设置窗口大小
+                            RECT bounds;
+                            GetClientRect(hWnd, &bounds);
+                            controller->put_Bounds(bounds);
+
+                            // 导航到本地页面
+                            webViewWindow->Navigate(L"http://localhost:5173/");
                             return S_OK;
                         }).Get());
                 return S_OK;
             }).Get());
+
+    if (FAILED(hr)) {
+        OutputDebugString(L"CreateCoreWebView2EnvironmentWithOptions failed\n");
+    }
 }
+
 
 
 LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
