@@ -287,8 +287,8 @@ const XactLayout = () => {
               isExpanded ? "w-full h-full" : ""
             }`}
             style={{
-              width: "800px",
-              height: "800px",
+              width: "900px",
+              height: "900px",
               position: "relative",
               zIndex: 1,
             }}

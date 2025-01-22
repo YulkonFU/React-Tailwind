@@ -142,27 +142,26 @@ const ManipulatorControl = () => {
     setError(null);
   };
 
-  // Handle move operation
   const handleMove = async () => {
     if (editingAxis === null || moveValue === "") return;
-
+  
     try {
       const handler = getHandler();
       if (!handler) throw new Error("Device handler not available");
-
+  
+      const axis = parseInt(editingAxis);
       const moveVal = parseFloat(moveValue);
-      if (isNaN(moveVal)) {
-        throw new Error("Invalid move value");
-      }
-
-      // Move axis - dispId 103
-      await handler.moveAxis(editingAxis, moveVal);
+      
+      console.log("Moving axis:", axis, "to position:", moveVal);
+  
+      //case 103 
+      const moveResult = await handler.moveAxis(axis, moveVal);
+      console.log("Move result:", moveResult);
+  
       await updateStatus();
-
       setEditingAxis(null);
       setMoveValue("");
-      setError(null);
-
+      
     } catch (err) {
       console.error("Move operation failed:", err);
       setError(err.message);
@@ -176,7 +175,7 @@ const ManipulatorControl = () => {
       if (!handler) throw new Error("Device handler not available");
 
       // Stop - dispId 105
-      await handler.stop(ALL_AXIS);
+      await handler.stop.invoke(ALL_AXIS);
       await updateStatus();
 
       setEditingAxis(null);
@@ -196,7 +195,7 @@ const ManipulatorControl = () => {
       if (!handler) throw new Error("Device handler not available");
 
       // Enable/disable joy - dispId 106
-      await handler.enableJoy(ALL_AXIS, !manipulatorState.isJoyEnabled);
+      await handler.enableJoy.invoke(ALL_AXIS, !manipulatorState.isJoyEnabled);
       await updateStatus();
       
       setError(null);

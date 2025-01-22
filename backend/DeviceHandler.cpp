@@ -178,9 +178,26 @@ STDMETHODIMP DeviceHandler::Invoke(DISPID dispIdMember, REFIID riid, LCID lcid,
 			break;
 
 		case 103: // moveAxis
-			if (!pDispParams || pDispParams->cArgs != 2) return E_INVALIDARG;
+			if (!pDispParams || pDispParams->cArgs != 2) {
+				OutputDebugString(L"moveAxis: Invalid argument count\n");
+				if (pDispParams) {
+					wchar_t debug[100];
+					swprintf(debug, 100, L"Expected 2 args, got %d\n", pDispParams->cArgs);
+					OutputDebugString(debug);
+				}
+				return E_INVALIDARG;
+			}
+
+			// 添加参数类型检查
+			if (pDispParams->rgvarg[1].vt != VT_I4 ||
+				pDispParams->rgvarg[0].vt != VT_R8) {
+				OutputDebugString(L"moveAxis: Invalid argument types\n");
+				return E_INVALIDARG;
+			}
+
 			isAsyncOperation = true;
-			future = std::async(std::launch::async, [this, axis = pDispParams->rgvarg[1].intVal,
+			future = std::async(std::launch::async, [this,
+				axis = pDispParams->rgvarg[1].intVal,
 				position = pDispParams->rgvarg[0].dblVal]() -> HRESULT {
 					return m_cnc->StartTo(axis, position) ? S_OK : E_FAIL;
 				});
