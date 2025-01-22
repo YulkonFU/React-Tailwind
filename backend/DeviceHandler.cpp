@@ -3,12 +3,13 @@
 #include "DeviceHandler.h"
 #include <sstream>
 #include <future>
+#include <string>
 
 const char* GetXrayStateString(CXray::XR_STATE state);
 const char* GetCncStateString(CNCZustand state);
 
 DeviceHandler::DeviceHandler() : m_xray(nullptr), m_cnc(nullptr),
-m_hXrayDll(nullptr), m_hCncDll(nullptr)
+m_hXrayDll(nullptr), m_hCncDll(nullptr), positions(nullptr), axisCount(0)
 {
 	try {
 		// Initialize Xray
@@ -38,6 +39,10 @@ m_hXrayDll(nullptr), m_hCncDll(nullptr)
 			}
 			throw std::runtime_error("Failed to initialize CNC");
 		}
+
+		// 获取实际轴数并分配内存
+		axisCount = m_cnc->NrAxis();
+		positions = new double[axisCount];
 	}
 	catch (...) {
 		UnloadXrayDll();
@@ -66,6 +71,9 @@ DeviceHandler::~DeviceHandler()
 		}
 		catch (...) {}
 	}
+
+	// 释放 positions 的内存
+	delete[] positions;
 
 	UnloadXrayDll();
 	UnloadCncDll();
@@ -213,6 +221,9 @@ STDMETHODIMP DeviceHandler::Invoke(DISPID dispIdMember, REFIID riid, LCID lcid,
 
 		case 107: // getCncStatus
 			return GetCncStatus(pVarResult);
+
+		case 108: // getAxesInfo
+			return GetAxesInfo(pVarResult);
 
 		case 109: // getPositions
 			return GetPositions(pVarResult);
@@ -368,7 +379,6 @@ STDMETHODIMP DeviceHandler::GetTypeInfo(UINT iTInfo, LCID lcid, ITypeInfo** ppTI
 	return E_NOTIMPL;
 }
 
-// Add the missing method definitions
 HRESULT DeviceHandler::GetPositions(VARIANT* pResult)
 {
 	OutputDebugString(L"GetPositions called\n");
@@ -376,11 +386,10 @@ HRESULT DeviceHandler::GetPositions(VARIANT* pResult)
 		return E_INVALIDARG;
 	try {
 		std::ostringstream json;
-		double positions[CNC_MAX_AXIS];
 		m_cnc->GetAllLastPositions(positions);
 
 		json << "[";
-		for (int i = 0; i < CNC_MAX_AXIS; ++i) {
+		for (UINT i = 0; i < axisCount; ++i) {
 			if (i > 0) json << ",";
 			json << positions[i];
 		}
@@ -391,49 +400,61 @@ HRESULT DeviceHandler::GetPositions(VARIANT* pResult)
 		pResult->bstrVal = SysAllocString(wstr.c_str());
 		OutputDebugString(L"GetPositions succeeded\n");
 		OutputDebugString(wstr.c_str());
+
 		return S_OK;
 	}
+	catch (const std::exception& e) {
+		OutputDebugStringA(e.what());
+		return E_FAIL;
+	}
 	catch (...) {
+		OutputDebugString(L"GetPositions failed with unknown exception\n");
 		return E_FAIL;
 	}
 }
 
 HRESULT DeviceHandler::GetAxesInfo(VARIANT* pResult) {
-    if (!pResult) return E_INVALIDARG;
-    try {
-        // 获取实际轴数
-        const UINT axisCount = m_cnc->NrAxis();
-        
-        std::ostringstream json;
-        json << "{\"axisCount\":" << axisCount << ",\"axes\":[";
-        
-        // 只遍历实际存在的轴
-        for (UINT i = 0; i < axisCount; ++i) {
-            if (i > 0) json << ",";
-            json << "{"
-                << "\"id\":" << i << ","
-                << "\"name\":\"" << m_cnc->AxisName(i) << "\","  // 使用实际轴名
-                << "\"minPos\":" << m_cnc->GetMinPos(i, nullptr) << ","
-                << "\"maxPos\":" << m_cnc->GetMaxPos(i, nullptr)
-                << "}";
-        }
-        json << "]}";
+	if (!pResult) return E_INVALIDARG;
+	try {
+		std::wstring temp = L"axisCount:" + std::to_wstring(axisCount);
+		OutputDebugString(temp.c_str());
 
-        std::wstring wstr = ConvertToWString(json.str());
-        pResult->vt = VT_BSTR;
-        pResult->bstrVal = SysAllocString(wstr.c_str());
-        
-        // 添加调试输出
-        OutputDebugString(L"GetAxesInfo succeeded\n");
-        OutputDebugString(wstr.c_str());
-        
-        return S_OK;
-    }
-    catch (...) {
-        OutputDebugString(L"GetAxesInfo failed\n");
-        return E_FAIL;
-    }
+		std::ostringstream json;
+		json << "{\"axisCount\":" << axisCount << ",\"axes\":[";
+
+		m_cnc->GetAllLastPositions(positions);
+
+		for (UINT i = 0; i < axisCount; ++i) {
+			if (i > 0) json << ",";
+			json << "{"
+				<< "\"id\":" << i << ","
+				<< "\"name\":\"" << m_cnc->AxisName(i) << "\","  // 使用实际轴名
+				<< "\"minPos\":" << m_cnc->GetMinPos(i, positions) << ","
+				<< "\"maxPos\":" << m_cnc->GetMaxPos(i, positions)
+				<< "}";
+		}
+		json << "]}";
+
+		std::wstring wstr = ConvertToWString(json.str());
+		pResult->vt = VT_BSTR;
+		pResult->bstrVal = SysAllocString(wstr.c_str());
+
+		OutputDebugString(L"GetAxesInfo succeeded\n");
+		OutputDebugString(wstr.c_str());
+
+		return S_OK;
+	}
+	catch (const std::exception& e) {
+		OutputDebugStringA(e.what());
+		return E_FAIL;
+	}
+	catch (...) {
+		OutputDebugString(L"GetAxesInfo failed with unknown exception\n");
+		return E_FAIL;
+	}
 }
+
+
 
 HRESULT DeviceHandler::GetCncStatus(VARIANT* pResult)
 {

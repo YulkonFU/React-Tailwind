@@ -19,6 +19,10 @@ private:
     // DLL handles  
     HMODULE m_hXrayDll;
     HMODULE m_hCncDll;
+    
+	// Axis information
+    double* positions; 
+    UINT axisCount; 
 
     // Helper methods
     bool LoadXrayDll();
