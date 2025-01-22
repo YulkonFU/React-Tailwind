@@ -5,6 +5,7 @@
 #include <future>
 #include <string>
 
+
 const char* GetXrayStateString(CXray::XR_STATE state);
 const char* GetCncStateString(CNCZustand state);
 
@@ -42,7 +43,7 @@ m_hXrayDll(nullptr), m_hCncDll(nullptr), positions(nullptr), axisCount(0)
 
 		// 获取实际轴数并分配内存
 		axisCount = m_cnc->NrAxis();
-		positions = new double[axisCount];
+		positions = new double[CNC_MAX_AXIS];
 	}
 	catch (...) {
 		UnloadXrayDll();
@@ -143,6 +144,7 @@ STDMETHODIMP DeviceHandler::Invoke(DISPID dispIdMember, REFIID riid, LCID lcid,
 			break;
 
 		case 6: // turnXrayOff
+
 			isAsyncOperation = true;
 			future = std::async(std::launch::async, [this]() -> HRESULT {
 				return m_xray->TurnOff() ? S_OK : E_FAIL;
@@ -177,31 +179,77 @@ STDMETHODIMP DeviceHandler::Invoke(DISPID dispIdMember, REFIID riid, LCID lcid,
 			}
 			break;
 
-		case 103: // moveAxis
-			if (!pDispParams || pDispParams->cArgs != 2) {
+			// DeviceHandler.cpp中的Invoke方法修改
+
+		case 103: { // moveAxis
+			OutputDebugString(L"moveAxis called\n");
+
+			// 检查参数列表是否存在
+			if (!pDispParams) {
+				OutputDebugString(L"moveAxis: No parameters provided\n");
+				return E_INVALIDARG;
+			}
+
+			// 记录接收到的参数数量
+			wchar_t debug[100];
+			swprintf(debug, 100, L"Received %d parameters\n", pDispParams->cArgs);
+			OutputDebugString(debug);
+
+			// 参数检查
+			if (pDispParams->cArgs != 2) {
 				OutputDebugString(L"moveAxis: Invalid argument count\n");
-				if (pDispParams) {
-					wchar_t debug[100];
-					swprintf(debug, 100, L"Expected 2 args, got %d\n", pDispParams->cArgs);
-					OutputDebugString(debug);
-				}
 				return E_INVALIDARG;
 			}
 
-			// 添加参数类型检查
-			if (pDispParams->rgvarg[1].vt != VT_I4 ||
-				pDispParams->rgvarg[0].vt != VT_R8) {
-				OutputDebugString(L"moveAxis: Invalid argument types\n");
+			// 记录参数类型
+			for (UINT i = 0; i < pDispParams->cArgs; i++) {
+				swprintf(debug, 100, L"Argument %d type: %d\n", i, pDispParams->rgvarg[i].vt);
+				OutputDebugString(debug);
+			}
+
+			// 获取参数(注意参数顺序是反的)
+			int axisIndex;
+			double position;
+
+			// 尝试转换第一个参数(axis)
+			VARIANT& axisVar = pDispParams->rgvarg[1];
+			if (axisVar.vt == VT_I4) {
+				axisIndex = axisVar.intVal;
+			}
+			else {
+				OutputDebugString(L"moveAxis: First argument not an integer\n");
 				return E_INVALIDARG;
 			}
 
-			isAsyncOperation = true;
-			future = std::async(std::launch::async, [this,
-				axis = pDispParams->rgvarg[1].intVal,
-				position = pDispParams->rgvarg[0].dblVal]() -> HRESULT {
-					return m_cnc->StartTo(axis, position) ? S_OK : E_FAIL;
-				});
-			break;
+			// 尝试转换第二个参数(position)
+			VARIANT& posVar = pDispParams->rgvarg[0];
+			if (posVar.vt == VT_R8) {
+				position = posVar.dblVal;
+			}
+			else if (posVar.vt == VT_I4) {
+				// 如果是整数也接受，转换为double
+				position = static_cast<double>(posVar.intVal);
+			}
+			else {
+				OutputDebugString(L"moveAxis: Second argument not a number\n");
+				return E_INVALIDARG;
+			}
+
+			// 记录最终解析的参数值
+			swprintf(debug, 100, L"Parsed parameters - axis: %d, position: %f\n", axisIndex, position);
+			OutputDebugString(debug);
+
+			// 执行移动操作
+			BOOL result = m_cnc->StartTo(axisIndex, position);
+
+			// 设置返回值
+			if (pVarResult) {
+				pVarResult->vt = VT_BOOL;
+				pVarResult->boolVal = result ? VARIANT_TRUE : VARIANT_FALSE;
+			}
+
+			return result ? S_OK : E_FAIL;
+		}
 
 		case 104: // moveAllAxes
 			if (!pDispParams || pDispParams->cArgs != 1) return E_INVALIDARG;
