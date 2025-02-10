@@ -146,27 +146,27 @@ const ManipulatorControl = () => {
     if (editingAxis === null || moveValue === "") return;
   
     try {
-      const handler = getHandler();
-      if (!handler) throw new Error("Device handler not available");
+        const handler = getHandler();
+        if (!handler) throw new Error("Device handler not available");
   
-      const axis = parseInt(editingAxis);
-      const moveVal = parseFloat(moveValue);
-      
-      console.log("Moving axis:", axis, "to position:", moveVal);
+        const axis = parseInt(editingAxis);
+        const moveVal = parseFloat(moveValue);
+        
+        console.log("Moving axis:", axis, "to position:", moveVal);
   
-      //case 103 
-      const moveResult = await handler.moveAxis(axis, moveVal);
-      console.log("Move result:", moveResult);
+        // 修正: 直接调用方法并使用await
+        const moveResult = await handler.moveAxis(axis, moveVal);
+        console.log("Move result:", moveResult);
   
-      await updateStatus();
-      setEditingAxis(null);
-      setMoveValue("");
-      
+        await updateStatus();
+        setEditingAxis(null);
+        setMoveValue("");
+        
     } catch (err) {
-      console.error("Move operation failed:", err);
-      setError(err.message);
+        console.error("Move operation failed:", err);
+        setError(err.message);
     }
-  };
+};
 
   // Handle stop operation
   const handleStop = async () => {

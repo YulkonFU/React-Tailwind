@@ -1,0 +1,49 @@
+import "oaidl.idl";
+import "ocidl.idl";
+
+[
+    uuid(026BB2C1-CBDC-4497-9772-39A2F75032D7),
+        version(1.0)
+]
+library DeviceHandlerLib
+{
+    importlib("stdole2.tlb");
+
+    [
+        uuid(026BB2C1-CBDC-4497-9772-39A2F75032D7),
+            object,
+            local
+    ]
+        interface IDeviceHandler : IUnknown
+    {
+        // Xray Control Methods
+        [id(1)] HRESULT InitializeXray();
+        [id(2)] HRESULT StartWarmup();
+        [id(3)] HRESULT SetVoltage([in] INT kV);
+        [id(4)] HRESULT SetCurrent([in] INT uA);
+        [id(5)] HRESULT TurnXrayOn();
+        [id(6)] HRESULT TurnXrayOff();
+        [id(7)] HRESULT SetFocus([in] INT mode);
+        [id(8)] HRESULT GetXrayStatus([out, retval] VARIANT* pResult);vcxprojvcxproj
+
+        // CNC Control Methods
+        [id(101)] HRESULT InitializeCnc();
+        [id(102)] HRESULT StartReference([in] INT axisIndex);
+        [id(103)] HRESULT MoveAxis([in] INT axisIndex, [in] DOUBLE position);
+        [id(104)] HRESULT MoveAllAxes([in] SAFEARRAY(DOUBLE) positions);
+        [id(105)] HRESULT Stop([in] INT axisIndex);
+        [id(106)] HRESULT EnableJoy([in] INT axisIndex, [in] BOOL enable);
+        [id(107)] HRESULT GetCncStatus([out, retval] VARIANT* pResult);
+        [id(108)] HRESULT GetAxesInfo([out, retval] VARIANT* pResult);
+        [id(109)] HRESULT GetPositions([out, retval] VARIANT* pResult);
+    };
+
+    [
+        uuid(7C48D2A7-83E1-4757-BC38-69F830504CA6)
+    ]
+        coclass DeviceHandler
+    {
+        [default] interface IDeviceHandler;
+        interface IDispatch;
+    };
+};
