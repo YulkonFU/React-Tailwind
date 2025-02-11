@@ -80,15 +80,17 @@ const ManipulatorControl = () => {
     try {
       const handler = getHandler();
       if (!handler) throw new Error("Device handler not available");
-
-      // Get status - dispId 107
+  
+      // Get status
       const status = JSON.parse(await handler.getCncStatus);
       log("CNC status:", status);
-
-      // Get positions - dispId 109
-      const positions = JSON.parse(await handler.getPositions);
-      log("Current positions:", positions);
-
+  
+      // Get positions with additional logging
+      const positionsStr = await handler.getPositions;
+      log("Raw positions string:", positionsStr);
+      const positions = JSON.parse(positionsStr);
+      log("Parsed positions:", positions);
+  
       setManipulatorState(prev => ({
         ...prev,
         status: status.status,
@@ -97,41 +99,12 @@ const ManipulatorControl = () => {
         isCollisionDetected: status.isCollisionDetected,
         currentPositions: positions
       }));
-
+  
       setError(null);
-
+  
     } catch (err) {
       console.error("Failed to update status:", err);
       setError(err.message);
-    }
-  };
-
-  // Handle reference operation
-  const handleReference = async () => {
-    try {
-      const handler = getHandler();
-      if (!handler) throw new Error("Device handler not available");
-
-      setManipulatorState(prev => ({
-        ...prev,
-        isReferencing: true,
-        status: "CNC_DRIVING_REF"
-      }));
-
-      // Start reference - dispId 102
-      await handler.startReference;
-      await updateStatus();
-
-      setError(null);
-
-    } catch (err) {
-      console.error("Reference operation failed:", err);
-      setError(err.message);
-    } finally {
-      setManipulatorState(prev => ({
-        ...prev,
-        isReferencing: false
-      }));
     }
   };
 
@@ -142,70 +115,6 @@ const ManipulatorControl = () => {
     setError(null);
   };
 
-  const handleMove = async () => {
-    if (editingAxis === null || moveValue === "") return;
-  
-    try {
-        const handler = getHandler();
-        if (!handler) throw new Error("Device handler not available");
-  
-        const axis = parseInt(editingAxis);
-        const moveVal = parseFloat(moveValue);
-        
-        console.log("Moving axis:", axis, "to position:", moveVal);
-  
-        // 修正: 直接调用方法并使用await
-        const moveResult = await handler.moveAxis(axis, moveVal);
-        console.log("Move result:", moveResult);
-  
-        await updateStatus();
-        setEditingAxis(null);
-        setMoveValue("");
-        
-    } catch (err) {
-        console.error("Move operation failed:", err);
-        setError(err.message);
-    }
-};
-
-  // Handle stop operation
-  const handleStop = async () => {
-    try {
-      const handler = getHandler();
-      if (!handler) throw new Error("Device handler not available");
-
-      // Stop - dispId 105
-      await handler.stop.invoke(ALL_AXIS);
-      await updateStatus();
-
-      setEditingAxis(null);
-      setMoveValue("");
-      setError(null);
-
-    } catch (err) {
-      console.error("Stop operation failed:", err);
-      setError(err.message);
-    }
-  };
-
-  // Handle joystick toggle
-  const handleJoystickToggle = async () => {
-    try {
-      const handler = getHandler();
-      if (!handler) throw new Error("Device handler not available");
-
-      // Enable/disable joy - dispId 106
-      await handler.enableJoy.invoke(ALL_AXIS, !manipulatorState.isJoyEnabled);
-      await updateStatus();
-      
-      setError(null);
-
-    } catch (err) {
-      console.error("Joystick toggle failed:", err);
-      setError(err.message);
-    }
-  };
-
   // Validate input value
   const handleMoveValueChange = (value) => {
     if (/^[+-]?\d*\.?\d*$/.test(value)) {
@@ -213,6 +122,120 @@ const ManipulatorControl = () => {
       setError(null);
     }
   };
+
+
+// 修改 handleMove 函数 - 使用与电压设置相同的模式
+const handleMove = async () => {
+  if (editingAxis === null || moveValue === "") return;
+
+  try {
+    const handler = getHandler();
+    if (!handler) throw new Error("Device handler not available");
+
+    const axis = parseInt(editingAxis);
+    const moveVal = parseFloat(moveValue);
+    
+    console.log("Moving axis:", axis, "to position:", moveVal);
+
+    // 执行移动
+    handler.targetPosition = `${axis},${moveVal}`;
+
+    // 每200ms检查一次位置是否到达
+    let retryCount = 0;
+    const maxRetries = 50; // 最大等待10秒
+    
+    while (retryCount < maxRetries) {
+      // 使用属性方式检查位置是否到达
+      handler.positionReached = axis;  // 设置要检查的轴
+      const reached = await handler.positionReached;  // 获取结果
+      console.log(`Checking position reached, attempt ${retryCount + 1}, result:`, reached);
+      
+      if (reached) {
+        console.log("Target position reached!");
+        break;
+      }
+      
+      await new Promise(resolve => setTimeout(resolve, 200)); // 每200ms检查一次
+      retryCount++;
+    }
+
+    // 位置到达后更新状态
+    await updateStatus();
+    
+    setEditingAxis(null);
+    setMoveValue("");
+    
+  } catch (err) {
+    console.error("Move operation failed:", err);
+    setError(err.message);
+  }
+};
+
+// 修改 handleReference 函数
+const handleReference = async () => {
+  try {
+    const handler = getHandler();
+    if (!handler) throw new Error("Device handler not available");
+
+    setManipulatorState(prev => ({
+      ...prev,
+      isReferencing: true,
+      status: "CNC_DRIVING_REF"
+    }));
+
+    // Start reference - dispId 102
+    await handler.startReference;
+    await updateStatus();
+
+    setError(null);
+
+  } catch (err) {
+    console.error("Reference operation failed:", err);
+    setError(err.message);
+  } finally {
+    setManipulatorState(prev => ({
+      ...prev,
+      isReferencing: false
+    }));
+  }
+};
+
+// handleStop 函数修改
+const handleStop = async () => {
+  try {
+    const handler = getHandler();
+    if (!handler) throw new Error("Device handler not available");
+
+    // 修改: 直接赋值
+    handler.stopAxis = ALL_AXIS;
+
+    await updateStatus();
+    setEditingAxis(null);
+    setMoveValue("");
+    setError(null);
+  } catch (err) {
+    console.error("Stop operation failed:", err);
+    setError(err.message);
+  }
+};
+
+// handleJoystickToggle 函数修改
+const handleJoystickToggle = async () => {
+  try {
+    const handler = getHandler();
+    if (!handler) throw new Error("Device handler not available");
+
+    const currentState = manipulatorState.isJoyEnabled;
+    // 修改: 直接赋值
+    handler.joyEnabled = [ALL_AXIS, !currentState];
+
+    await updateStatus();
+    setError(null);
+  } catch (err) {
+    console.error("Joystick toggle failed:", err);
+    setError(err.message);
+  }
+};
 
   // // 定期更新状态
   // useEffect(() => {

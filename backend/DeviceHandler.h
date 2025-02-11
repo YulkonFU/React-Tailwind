@@ -6,33 +6,7 @@
 #include <string>
 #include "Xray.h"
 #include "Cnc.h"
-#include "DeviceHandler_i.h"  // 生成的头文件将会在这里
-
-// GUID可以使用guidgen.exe生成
-// {026BB2C1-CBDC-4497-9772-39A2F75032D7}
-interface __declspec(uuid("026BB2C1-CBDC-4497-9772-39A2F75032D7")) IDeviceHandler : IUnknown
-{
-    // Xray Control Methods
-    [id(1)] HRESULT InitializeXray();
-    [id(2)] HRESULT StartWarmup();
-    [id(3)] HRESULT SetVoltage([in] INT kV);
-    [id(4)] HRESULT SetCurrent([in] INT uA);
-    [id(5)] HRESULT TurnXrayOn();
-    [id(6)] HRESULT TurnXrayOff();
-    [id(7)] HRESULT SetFocus([in] INT mode);
-    [id(8)] HRESULT GetXrayStatus([out, retval] VARIANT* pResult);
-
-    // CNC Control Methods
-    [id(101)] HRESULT InitializeCnc();
-    [id(102)] HRESULT StartReference([in] INT axisIndex);
-    [id(103)] HRESULT MoveAxis([in] INT axisIndex,[in] DOUBLE position);
-    [id(104)] HRESULT MoveAllAxes([in] SAFEARRAY* positions);
-    [id(105)] HRESULT Stop([in] INT axisIndex);
-    [id(106)] HRESULT EnableJoy([in] INT axisIndex,[in] BOOL enable);
-    [id(107)] HRESULT GetCncStatus([out, retval] VARIANT* pResult);
-    [id(108)] HRESULT GetAxesInfo([out, retval] VARIANT* pResult);
-    [id(109)] HRESULT GetPositions([out, retval] VARIANT* pResult);
-};
+#include "DeviceHandler_i.h"  // 使用MIDL生成的接口定义
 
 class DeviceHandler :
     public Microsoft::WRL::RuntimeClass<
@@ -68,33 +42,33 @@ public:
     ~DeviceHandler();
 
     // IDispatch Methods
-    STDMETHOD(GetTypeInfoCount)(UINT* pctinfo) override;
-    STDMETHOD(GetTypeInfo)(UINT iTInfo, LCID lcid, ITypeInfo** ppTInfo) override;
+    STDMETHOD(GetTypeInfoCount)(UINT* pctinfo);
+    STDMETHOD(GetTypeInfo)(UINT iTInfo, LCID lcid, ITypeInfo** ppTInfo);
     STDMETHOD(GetIDsOfNames)(REFIID riid, LPOLESTR* rgszNames, UINT cNames,
-        LCID lcid, DISPID* rgDispId) override;
+        LCID lcid, DISPID* rgDispId);
     STDMETHOD(Invoke)(DISPID dispIdMember, REFIID riid, LCID lcid,
         WORD wFlags, DISPPARAMS* pDispParams, VARIANT* pVarResult,
-        EXCEPINFO* pExcepInfo, UINT* puArgErr) override;
+        EXCEPINFO* pExcepInfo, UINT* puArgErr);
 
     // IDeviceHandler Methods
     // Xray Control Methods
-    STDMETHOD(InitializeXray)() override;
-    STDMETHOD(StartWarmup)() override;
-    STDMETHOD(SetVoltage)(INT kV) override;
-    STDMETHOD(SetCurrent)(INT uA) override;
-    STDMETHOD(SetFocus)(INT mode) override;
-    STDMETHOD(TurnXrayOn)() override;
-    STDMETHOD(TurnXrayOff)() override;
-    STDMETHOD(GetXrayStatus)(VARIANT* pResult) override;
+    STDMETHOD(InitializeXray)();
+    STDMETHOD(StartWarmup)();
+    STDMETHOD(SetVoltage)(INT kV);
+    STDMETHOD(SetCurrent)(INT uA);
+    STDMETHOD(SetFocus)(INT mode);
+    STDMETHOD(TurnXrayOn)();
+    STDMETHOD(TurnXrayOff)();
+    STDMETHOD(GetXrayStatus)(VARIANT* pResult);
 
     // CNC Control Methods
-    STDMETHOD(InitializeCnc)() override;
-    STDMETHOD(StartReference)(INT axisIndex) override;
-    STDMETHOD(MoveAxis)(INT axisIndex, DOUBLE position) override;
-    STDMETHOD(MoveAllAxes)(SAFEARRAY* positions) override;
-    STDMETHOD(Stop)(INT axisIndex) override;
-    STDMETHOD(EnableJoy)(INT axisIndex, BOOL enable) override;
-    STDMETHOD(GetCncStatus)(VARIANT* pResult) override;
-    STDMETHOD(GetAxesInfo)(VARIANT* pResult) override;
-    STDMETHOD(GetPositions)(VARIANT* pResult) override;
+    STDMETHOD(InitializeCnc)();
+    STDMETHOD(StartReference)(INT axisIndex);
+    STDMETHOD(MoveAxis)(INT axisIndex, DOUBLE position);
+    STDMETHOD(MoveAllAxes)(SAFEARRAY* positions);
+    STDMETHOD(Stop)(INT axisIndex);
+    STDMETHOD(EnableJoy)(INT axisIndex, BOOL enable);
+    STDMETHOD(GetCncStatus)(VARIANT* pResult);
+    STDMETHOD(GetAxesInfo)(VARIANT* pResult);
+    STDMETHOD(GetPositions)(VARIANT* pResult);
 };

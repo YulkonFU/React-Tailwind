@@ -102,7 +102,7 @@ const XrayControl = ({ onStatusChange }) => {
       }
 
       // 使用属性设置方式而不是方法调用
-      handler.Voltage = newVoltage;
+      handler.voltage = newVoltage;
 
       await updateStatus();
     } catch (err) {
@@ -126,7 +126,7 @@ const XrayControl = ({ onStatusChange }) => {
         throw new Error("Invalid current value (0-500µA)");
       }
 
-      handler.Current = newCurrent;
+      handler.current = newCurrent;
 
 
       await updateStatus();

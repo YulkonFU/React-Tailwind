@@ -4,6 +4,7 @@
 #include <sstream>
 #include <future>
 #include <string>
+#include <iomanip>
 
 
 const char* GetXrayStateString(CXray::XR_STATE state);
@@ -41,9 +42,13 @@ m_hXrayDll(nullptr), m_hCncDll(nullptr), positions(nullptr), axisCount(0)
 			throw std::runtime_error("Failed to initialize CNC");
 		}
 
-		// 获取实际轴数并分配内存
-		axisCount = m_cnc->NrAxis();
-		positions = new double[CNC_MAX_AXIS];
+		// 初始化位置数组
+		if (m_cnc) {
+			axisCount = m_cnc->NrAxis();
+			positions = new double[CNC_MAX_AXIS];
+			std::wstring debug = L"Initialized with " + std::to_wstring(axisCount) + L" axes\n";
+			OutputDebugString(debug.c_str());
+		}
 	}
 	catch (...) {
 		UnloadXrayDll();
@@ -89,12 +94,70 @@ STDMETHODIMP DeviceHandler::Invoke(DISPID dispIdMember, REFIID riid, LCID lcid,
 		// 处理属性 put 操作
 		if (wFlags & DISPATCH_PROPERTYPUT) {
 			switch (dispIdMember) {
-			case 11: // Voltage property
-				if (!pDispParams || pDispParams->cArgs != 1) return E_INVALIDARG;
+			case 11: // voltage
+				if (!m_xray || !pDispParams || pDispParams->cArgs != 1) return E_INVALIDARG;
 				return m_xray->SetkV(pDispParams->rgvarg[0].intVal) ? S_OK : E_FAIL;
-			case 12: // Current property  
-				if (!pDispParams || pDispParams->cArgs != 1) return E_INVALIDARG;
+
+			case 12: // current
+				if (!m_xray || !pDispParams || pDispParams->cArgs != 1) return E_INVALIDARG;
 				return m_xray->SetuA(pDispParams->rgvarg[0].intVal) ? S_OK : E_FAIL;
+
+			case 13: // focus
+				if (!m_xray || !pDispParams || pDispParams->cArgs != 1) return E_INVALIDARG;
+				return m_xray->SetSpotsize(pDispParams->rgvarg[0].intVal) ? S_OK : E_FAIL;
+
+			case 111: // targetPosition
+				if (!m_cnc || !pDispParams || pDispParams->cArgs != 1) {
+					return E_INVALIDARG;
+				}
+
+				try {
+					// 解析JSON字符串
+					std::wstring paramStr = pDispParams->rgvarg[0].bstrVal;
+					// 使用简单的字符串分割
+					size_t pos = paramStr.find(L",");
+					if (pos == std::wstring::npos) {
+						return E_INVALIDARG;
+					}
+
+					int axis = _wtoi(paramStr.substr(0, pos).c_str());
+					double position = _wtof(paramStr.substr(pos + 1).c_str());
+
+					return m_cnc->StartTo(axis, position) ? S_OK : E_FAIL;
+				}
+				catch (...) {
+					return E_FAIL;
+				}
+
+			case 112: // targetPositions
+				if (!m_cnc || !pDispParams || pDispParams->cArgs != 1) return E_INVALIDARG;
+				return m_cnc->StartTo((double*)pDispParams->rgvarg[0].parray->pvData) ?
+					S_OK : E_FAIL;
+
+			case 114: // stopAxis
+				if (!m_cnc || !pDispParams || pDispParams->cArgs != 1) return E_INVALIDARG;
+				m_cnc->Stop(pDispParams->rgvarg[0].intVal);
+				return S_OK;
+
+			case 115: // joyEnabled
+				if (!m_cnc || !pDispParams || pDispParams->cArgs != 2) return E_INVALIDARG;
+				if (pDispParams->rgvarg[0].boolVal) {
+					m_cnc->EnableJoy(pDispParams->rgvarg[1].intVal);
+				}
+				else {
+					m_cnc->DisableJoy(pDispParams->rgvarg[1].intVal);
+				}
+				return S_OK;
+
+			case 116: // positionReached
+				if (!m_cnc || !pDispParams || pDispParams->cArgs != 1) return E_INVALIDARG;
+				if (pVarResult) {
+					pVarResult->vt = VT_BOOL;
+					pVarResult->boolVal = m_cnc->PositionReached(pDispParams->rgvarg[0].intVal) ?
+						VARIANT_TRUE : VARIANT_FALSE;
+				}
+				return S_OK;
+
 			default:
 				return DISP_E_MEMBERNOTFOUND;
 			}
@@ -120,22 +183,6 @@ STDMETHODIMP DeviceHandler::Invoke(DISPID dispIdMember, REFIID riid, LCID lcid,
 				});
 			break;
 
-		case 3: // setVoltage
-			if (!pDispParams || pDispParams->cArgs != 1) return E_INVALIDARG;
-			isAsyncOperation = true;
-			future = std::async(std::launch::async, [this, voltage = pDispParams->rgvarg[0].intVal]() -> HRESULT {
-				return m_xray->SetkV(voltage) ? S_OK : E_FAIL;
-				});
-			break;
-
-		case 4: // setCurrent
-			if (!pDispParams || pDispParams->cArgs != 1) return E_INVALIDARG;
-			isAsyncOperation = true;
-			future = std::async(std::launch::async, [this, current = pDispParams->rgvarg[0].intVal]() -> HRESULT {
-				return m_xray->SetuA(current) ? S_OK : E_FAIL;
-				});
-			break;
-
 		case 5: // turnXrayOn
 			isAsyncOperation = true;
 			future = std::async(std::launch::async, [this]() -> HRESULT {
@@ -148,14 +195,6 @@ STDMETHODIMP DeviceHandler::Invoke(DISPID dispIdMember, REFIID riid, LCID lcid,
 			isAsyncOperation = true;
 			future = std::async(std::launch::async, [this]() -> HRESULT {
 				return m_xray->TurnOff() ? S_OK : E_FAIL;
-				});
-			break;
-
-		case 7: // setFocus
-			if (!pDispParams || pDispParams->cArgs != 1) return E_INVALIDARG;
-			isAsyncOperation = true;
-			future = std::async(std::launch::async, [this, focus = pDispParams->rgvarg[0].intVal]() -> HRESULT {
-				return m_xray->SetSpotsize(focus) ? S_OK : E_FAIL;
 				});
 			break;
 
@@ -180,109 +219,6 @@ STDMETHODIMP DeviceHandler::Invoke(DISPID dispIdMember, REFIID riid, LCID lcid,
 			break;
 
 			// DeviceHandler.cpp中的Invoke方法修改
-
-		case 103: { // moveAxis
-			OutputDebugString(L"moveAxis called\n");
-
-			// 检查参数列表是否存在
-			if (!pDispParams) {
-				OutputDebugString(L"moveAxis: No parameters provided\n");
-				return E_INVALIDARG;
-			}
-
-			// 记录接收到的参数数量
-			wchar_t debug[100];
-			swprintf(debug, 100, L"Received %d parameters\n", pDispParams->cArgs);
-			OutputDebugString(debug);
-
-			// 参数检查
-			if (pDispParams->cArgs != 2) {
-				OutputDebugString(L"moveAxis: Invalid argument count\n");
-				return E_INVALIDARG;
-			}
-
-			// 记录参数类型
-			for (UINT i = 0; i < pDispParams->cArgs; i++) {
-				swprintf(debug, 100, L"Argument %d type: %d\n", i, pDispParams->rgvarg[i].vt);
-				OutputDebugString(debug);
-			}
-
-			// 获取参数(注意参数顺序是反的)
-			int axisIndex;
-			double position;
-
-			// 尝试转换第一个参数(axis)
-			VARIANT& axisVar = pDispParams->rgvarg[1];
-			if (axisVar.vt == VT_I4) {
-				axisIndex = axisVar.intVal;
-			}
-			else {
-				OutputDebugString(L"moveAxis: First argument not an integer\n");
-				return E_INVALIDARG;
-			}
-
-			// 尝试转换第二个参数(position)
-			VARIANT& posVar = pDispParams->rgvarg[0];
-			if (posVar.vt == VT_R8) {
-				position = posVar.dblVal;
-			}
-			else if (posVar.vt == VT_I4) {
-				// 如果是整数也接受，转换为double
-				position = static_cast<double>(posVar.intVal);
-			}
-			else {
-				OutputDebugString(L"moveAxis: Second argument not a number\n");
-				return E_INVALIDARG;
-			}
-
-			// 记录最终解析的参数值
-			swprintf(debug, 100, L"Parsed parameters - axis: %d, position: %f\n", axisIndex, position);
-			OutputDebugString(debug);
-
-			// 执行移动操作
-			BOOL result = m_cnc->StartTo(axisIndex, position);
-
-			// 设置返回值
-			if (pVarResult) {
-				pVarResult->vt = VT_BOOL;
-				pVarResult->boolVal = result ? VARIANT_TRUE : VARIANT_FALSE;
-			}
-
-			return result ? S_OK : E_FAIL;
-		}
-
-		case 104: // moveAllAxes
-			if (!pDispParams || pDispParams->cArgs != 1) return E_INVALIDARG;
-			isAsyncOperation = true;
-			future = std::async(std::launch::async, [this, positions = (double*)pDispParams->rgvarg[0].parray->pvData]() -> HRESULT {
-				return m_cnc->StartTo(positions) ? S_OK : E_FAIL;
-				});
-			break;
-
-		case 105: // stop
-			if (pDispParams && pDispParams->cArgs > 0) {
-				isAsyncOperation = true;
-				future = std::async(std::launch::async, [this, axis = pDispParams->rgvarg[0].intVal]() -> HRESULT {
-					m_cnc->Stop(axis);
-					return S_OK;
-					});
-			}
-			break;
-
-		case 106: // enableJoy
-			if (!pDispParams || pDispParams->cArgs != 2) return E_INVALIDARG;
-			isAsyncOperation = true;
-			future = std::async(std::launch::async, [this, axis = pDispParams->rgvarg[1].intVal,
-				enable = pDispParams->rgvarg[0].boolVal]() -> HRESULT {
-					if (enable) {
-						m_cnc->EnableJoy(axis);
-					}
-					else {
-						m_cnc->DisableJoy(axis);
-					}
-					return S_OK;
-				});
-			break;
 
 		case 107: // getCncStatus
 			return GetCncStatus(pVarResult);
@@ -325,25 +261,25 @@ STDMETHODIMP DeviceHandler::GetIDsOfNames(REFIID riid, LPOLESTR* rgszNames,
 		const wchar_t* name;
 		DISPID id;
 	} methods[] = {
-		// Xray methods
+		// 带参数的方法全部改为属性
+		{L"voltage", 11},
+		{L"current", 12},
+		{L"focus", 13},
+		{L"axisCurrent", 14},
+		{L"targetPosition", 111},
+		{L"targetPositions", 112},
+		{L"stopAxis", 114},
+		{L"joyEnabled", 115},
+		{L"positionReached", 116}, 
+
+		// 无参数方法保持不变
 		{L"initializeXray", 1},
 		{L"startWarmup", 2},
-		{L"setVoltage", 3},
-		{L"setCurrent", 4},
 		{L"turnXrayOn", 5},
 		{L"turnXrayOff", 6},
-		{L"setFocus", 7},
 		{L"getXrayStatus", 8},
-		{L"Voltage", 11},
-		{L"Current", 12},
-
-		// CNC methods - using 100+ IDs
 		{L"initializeCnc", 101},
 		{L"startReference", 102},
-		{L"moveAxis", 103},
-		{L"moveAllAxes", 104},
-		{L"stop", 105},
-		{L"enableJoy", 106},
 		{L"getCncStatus", 107},
 		{L"getAxesInfo", 108},
 		{L"getPositions", 109}
@@ -450,26 +386,48 @@ HRESULT DeviceHandler::GetPositions(VARIANT* pResult)
 	if (!pResult)
 		return E_INVALIDARG;
 	try {
-		std::ostringstream json;
+		// 获取最新位置
+		if (!m_cnc) {
+			throw std::runtime_error("CNC not initialized");
+		}
+
+		// 确保positions数组已初始化
+		if (!positions) {
+			positions = new double[CNC_MAX_AXIS];
+		}
+
+		// 获取当前位置
 		m_cnc->GetAllLastPositions(positions);
 
+		// Debug输出每个轴的位置
+		for (UINT i = 0; i < axisCount; ++i) {
+			std::wstring posStr = L"Axis " + std::to_wstring(i) + L" position: " + std::to_wstring(positions[i]) + L"\n";
+			OutputDebugString(posStr.c_str());
+		}
+
+		// 构建JSON数组
+		std::ostringstream json;
 		json << "[";
 		for (UINT i = 0; i < axisCount; ++i) {
 			if (i > 0) json << ",";
-			json << positions[i];
+			json << std::fixed << std::setprecision(3) << positions[i];
 		}
 		json << "]";
 
 		std::wstring wstr = ConvertToWString(json.str());
 		pResult->vt = VT_BSTR;
 		pResult->bstrVal = SysAllocString(wstr.c_str());
-		OutputDebugString(L"GetPositions succeeded\n");
+
+		// Debug输出最终的JSON字符串
+		OutputDebugString(L"GetPositions result: ");
 		OutputDebugString(wstr.c_str());
+		OutputDebugString(L"\n");
 
 		return S_OK;
 	}
 	catch (const std::exception& e) {
-		OutputDebugStringA(e.what());
+		std::string error = "GetPositions failed: " + std::string(e.what());
+		OutputDebugStringA(error.c_str());
 		return E_FAIL;
 	}
 	catch (...) {
@@ -580,4 +538,3 @@ HRESULT DeviceHandler::GetXrayStatus(VARIANT* pResult)
 		return E_FAIL;
 	}
 }
-
