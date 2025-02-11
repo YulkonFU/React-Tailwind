@@ -1,19 +1,20 @@
 ﻿@echo off
-echo Compiling IDL to TLB...
+chcp 65001
 
-:: 设置MIDL路径（根据你的Windows SDK版本可能需要调整）
+echo Setting up Visual Studio environment...
+call "C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\Tools\VsDevCmd.bat"
+
+echo Compiling IDL to TLB...
 set MIDL_PATH="C:\Program Files (x86)\Windows Kits\10\bin\10.0.22621.0\x64\midl.exe"
 
-:: 编译IDL
-%MIDL_PATH% /nologo /tlb DeviceHandler.tlb /h DeviceHandler_i.h "Source Files\DeviceHandler.idl"
+REM 直接在当前目录生成文件
+%MIDL_PATH% /nologo /tlb .\DeviceHandler.tlb /h .\DeviceHandler_i.h .\DeviceHandler.idl
 
 if %ERRORLEVEL% EQU 0 (
     echo Successfully generated type library.
-    echo Moving files to appropriate locations...
-    
-    :: 移动生成的文件到对应目录
-    move /y DeviceHandler.tlb bin\
-    move /y DeviceHandler_i.h "Header Files\"
+    echo Files generated in current directory:
+    echo - DeviceHandler.tlb
+    echo - DeviceHandler_i.h
 ) else (
     echo Failed to generate type library.
 )
