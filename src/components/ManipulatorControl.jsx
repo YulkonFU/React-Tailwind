@@ -22,13 +22,16 @@ const ManipulatorControl = () => {
   // State management
   const [manipulatorState, setManipulatorState] = useState({
     status: "CNC_NOT_READY",
+    isMoving: false,
+    isDrivingRef: false,
+    isPositionReached: false,
     isJoyEnabled: false,
     isDoorOpen: false,
     isCollisionDetected: false,
     isReferencing: false,
     axisCount: 0,
     currentPositions: [],
-    axisNames: [],
+    axisNames: []
   });
 
   const [showAxisPanel, setShowAxisPanel] = useState(true);
@@ -94,6 +97,9 @@ const ManipulatorControl = () => {
       setManipulatorState(prev => ({
         ...prev,
         status: status.status,
+        isMoving: status.isMoving,
+        isDrivingRef: status.isDrivingRef,
+        isPositionReached: status.isPositionReached,
         isJoyEnabled: status.isJoyEnabled,
         isDoorOpen: status.isDoorOpen,
         isCollisionDetected: status.isCollisionDetected,
@@ -133,35 +139,56 @@ const handleMove = async () => {
     if (!handler) throw new Error("Device handler not available");
 
     const axis = parseInt(editingAxis);
-    const moveVal = parseFloat(moveValue);
+    const increment = parseFloat(moveValue); // 这里改为增量值
     
-    console.log("Moving axis:", axis, "to position:", moveVal);
+    // 获取当前位置
+    const currentPositions = JSON.parse(await handler.getPositions);
+    const currentPos = currentPositions[axis];
+    const targetPos = currentPos + increment; // 目标位置 = 当前位置 + 增量
+
+    console.log(`Moving axis ${axis} from ${currentPos} by ${increment} to ${targetPos}`);
 
     // 执行移动
-    handler.targetPosition = `${axis},${moveVal}`;
+    handler.targetPosition = `${axis},${targetPos}`;
 
-    // 每200ms检查一次位置是否到达
+    // 等待移动开始
+    await new Promise(resolve => setTimeout(resolve, 100));
+
+    // 检查位置是否到达
     let retryCount = 0;
-    const maxRetries = 50; // 最大等待10秒
+    const maxRetries = 100; // 最大等待10秒
     
     while (retryCount < maxRetries) {
-      // 使用属性方式检查位置是否到达
-      handler.positionReached = axis;  // 设置要检查的轴
-      const reached = await handler.positionReached;  // 获取结果
-      console.log(`Checking position reached, attempt ${retryCount + 1}, result:`, reached);
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      // 获取最新状态和位置
+      const status = JSON.parse(await handler.getCncStatus);
+      const positions = JSON.parse(await handler.getPositions);
+      const currentPosition = positions[axis];
+      
+      console.log(`Current status: ${status.status}, Position: ${currentPosition}, Target: ${targetPos}`);
+      
+      // 使用 positionReached 检查是否到达目标位置
+      const reached = await handler.positionReached;
+      console.log(`Position reached check: ${reached}`);
       
       if (reached) {
         console.log("Target position reached!");
+        // 验证最终位置
+        const finalPositions = JSON.parse(await handler.getPositions);
+        console.log(`Final position for axis ${axis}: ${finalPositions[axis]}`);
         break;
       }
       
-      await new Promise(resolve => setTimeout(resolve, 200)); // 每200ms检查一次
       retryCount++;
+      console.log(`Retry count: ${retryCount}`);
     }
 
-    // 位置到达后更新状态
+    if (retryCount >= maxRetries) {
+      console.warn("Movement timeout");
+    }
+
     await updateStatus();
-    
     setEditingAxis(null);
     setMoveValue("");
     
@@ -227,7 +254,7 @@ const handleJoystickToggle = async () => {
 
     const currentState = manipulatorState.isJoyEnabled;
     // 修改: 直接赋值
-    handler.joyEnabled = [ALL_AXIS, !currentState];
+    handler.joyEnabled = !currentState;
 
     await updateStatus();
     setError(null);
@@ -237,11 +264,11 @@ const handleJoystickToggle = async () => {
   }
 };
 
-  // // 定期更新状态
-  // useEffect(() => {
-  //   const interval = setInterval(updateStatus, 1000);
-  //   return () => clearInterval(interval);
-  // }, []);
+// // 启用定时更新
+// useEffect(() => {
+//   const interval = setInterval(updateStatus, 200);  // 每200ms更新一次
+//   return () => clearInterval(interval);
+// }, []);
 
   return (
     <div className="p-4 bg-gray-100 rounded-lg space-y-4">

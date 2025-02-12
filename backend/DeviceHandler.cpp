@@ -49,6 +49,8 @@ m_hXrayDll(nullptr), m_hCncDll(nullptr), positions(nullptr), axisCount(0)
 			std::wstring debug = L"Initialized with " + std::to_wstring(axisCount) + L" axes\n";
 			OutputDebugString(debug.c_str());
 		}
+
+
 	}
 	catch (...) {
 		UnloadXrayDll();
@@ -108,24 +110,57 @@ STDMETHODIMP DeviceHandler::Invoke(DISPID dispIdMember, REFIID riid, LCID lcid,
 
 			case 111: // targetPosition
 				if (!m_cnc || !pDispParams || pDispParams->cArgs != 1) {
+					OutputDebugString(L"Invalid parameters for targetPosition\n");
 					return E_INVALIDARG;
 				}
 
 				try {
-					// 解析JSON字符串
+					// 检查参数类型
+					OutputDebugString(L"Parameter type: ");
+					OutputDebugString(std::to_wstring(pDispParams->rgvarg[0].vt).c_str());
+					OutputDebugString(L"\n");
+
+					// 获取并输出原始字符串
 					std::wstring paramStr = pDispParams->rgvarg[0].bstrVal;
+					OutputDebugString(L"Raw parameter string: ");
+					OutputDebugString(paramStr.c_str());
+					OutputDebugString(L"\n");
+
 					// 使用简单的字符串分割
 					size_t pos = paramStr.find(L",");
 					if (pos == std::wstring::npos) {
+						OutputDebugString(L"Comma delimiter not found in parameter string\n");
 						return E_INVALIDARG;
 					}
 
-					int axis = _wtoi(paramStr.substr(0, pos).c_str());
-					double position = _wtof(paramStr.substr(pos + 1).c_str());
+					// 分割并解析
+					std::wstring axisStr = paramStr.substr(0, pos);
+					std::wstring posStr = paramStr.substr(pos + 1);
 
-					return m_cnc->StartTo(axis, position) ? S_OK : E_FAIL;
+					OutputDebugString(L"Axis string: ");
+					OutputDebugString(axisStr.c_str());
+					OutputDebugString(L"\n");
+
+					OutputDebugString(L"Position string: ");
+					OutputDebugString(posStr.c_str());
+					OutputDebugString(L"\n");
+
+					int axis = _wtoi(axisStr.c_str());
+					double position = _wtof(posStr.c_str());
+
+					// 输出解析后的值
+					std::wstring debug = L"Parsed values - Axis: " + std::to_wstring(axis) +
+						L", Position: " + std::to_wstring(position) + L"\n";
+					OutputDebugString(debug.c_str());
+
+					// 调用移动并输出结果
+					BOOL result = m_cnc->StartTo(axis, position);
+					OutputDebugString(result ? L"StartTo succeeded\n" : L"StartTo failed\n");
+
+					return result ? S_OK : E_FAIL;
 				}
 				catch (...) {
+					OutputDebugString(L"Exception occurred during targetPosition processing\n");
 					return E_FAIL;
 				}
 
@@ -140,23 +175,57 @@ STDMETHODIMP DeviceHandler::Invoke(DISPID dispIdMember, REFIID riid, LCID lcid,
 				return S_OK;
 
 			case 115: // joyEnabled
-				if (!m_cnc || !pDispParams || pDispParams->cArgs != 2) return E_INVALIDARG;
-				if (pDispParams->rgvarg[0].boolVal) {
-					m_cnc->EnableJoy(pDispParams->rgvarg[1].intVal);
-				}
-				else {
-					m_cnc->DisableJoy(pDispParams->rgvarg[1].intVal);
-				}
-				return S_OK;
-
-			case 116: // positionReached
 				if (!m_cnc || !pDispParams || pDispParams->cArgs != 1) return E_INVALIDARG;
-				if (pVarResult) {
-					pVarResult->vt = VT_BOOL;
-					pVarResult->boolVal = m_cnc->PositionReached(pDispParams->rgvarg[0].intVal) ?
-						VARIANT_TRUE : VARIANT_FALSE;
+				{
+					// 日志输出检查
+					OutputDebugString(L"Setting joystick enabled state\n");
+
+					// 获取并设置摇杆状态
+					BOOL enable = pDispParams->rgvarg[0].boolVal;
+					if (enable) {
+						m_cnc->EnableJoy();
+					}
+					else {
+						m_cnc->DisableJoy();
+					}
+
+					// 设置返回值
+					if (pVarResult) {
+						pVarResult->vt = VT_BOOL;
+						pVarResult->boolVal = VARIANT_TRUE;
+					}
+
+					// 调试输出
+					std::wstring debug = L"Joystick enabled state set to: " +
+						std::to_wstring(enable) + L"\n";
+					OutputDebugString(debug.c_str());
+
+					return S_OK;
 				}
-				return S_OK;
+
+				// 在 DeviceHandler.cpp 中修改 case 116
+			case 116: // positionReached
+				if (!m_cnc || !pDispParams || pDispParams->cArgs != 0) return E_INVALIDARG;
+				{
+					// 日志输出检查
+					OutputDebugString(L"Checking position reached for all axes\n");
+
+					// 获取位置到达状态
+					BOOL reached = m_cnc->PositionReached();
+
+					// 设置返回值
+					if (pVarResult) {
+						pVarResult->vt = VT_BOOL;
+						pVarResult->boolVal = reached ? VARIANT_TRUE : VARIANT_FALSE;
+					}
+
+					// 调试输出
+					std::wstring debug = L"Position reached result for all axes: " +
+						std::to_wstring(reached) + L"\n";
+					OutputDebugString(debug.c_str());
+
+					return S_OK;
+				}
 
 			default:
 				return DISP_E_MEMBERNOTFOUND;
@@ -270,7 +339,7 @@ STDMETHODIMP DeviceHandler::GetIDsOfNames(REFIID riid, LPOLESTR* rgszNames,
 		{L"targetPositions", 112},
 		{L"stopAxis", 114},
 		{L"joyEnabled", 115},
-		{L"positionReached", 116}, 
+		{L"positionReached", 116},
 
 		// 无参数方法保持不变
 		{L"initializeXray", 1},
@@ -391,13 +460,11 @@ HRESULT DeviceHandler::GetPositions(VARIANT* pResult)
 			throw std::runtime_error("CNC not initialized");
 		}
 
-		// 确保positions数组已初始化
-		if (!positions) {
-			positions = new double[CNC_MAX_AXIS];
-		}
+		// 获取当前位置前先等待一小段时间
+		Sleep(200);  // 等待200ms让位置更新
 
 		// 获取当前位置
-		m_cnc->GetAllLastPositions(positions);
+		m_cnc->GetAllSetPositions(positions);
 
 		// Debug输出每个轴的位置
 		for (UINT i = 0; i < axisCount; ++i) {
@@ -482,17 +549,33 @@ HRESULT DeviceHandler::GetAxesInfo(VARIANT* pResult) {
 HRESULT DeviceHandler::GetCncStatus(VARIANT* pResult)
 {
 	OutputDebugString(L"GetCncStatus called\n");
-	if (!pResult)
+	if (!pResult || !m_cnc)
 		return E_INVALIDARG;
 	try {
 		std::ostringstream json;
 		CNCZustand state = static_cast<CNCZustand>(m_cnc->Zustand());
-		const char* stateStr = GetCncStateString(state);
+		bool isMoving = m_cnc->IsMoving();
+
+		// 修改：不带参数的 PositionReached
+		bool positionReached = m_cnc->PositionReached();
+
+		// 根据实际状态确定显示状态
+		const char* stateStr;
+		if (state == CNC_WAS_STARTED && !isMoving && positionReached) {
+			stateStr = "CNC_STAND_STILL";
+		}
+		else if (state == CNC_WAS_STARTED && isMoving) {
+			stateStr = "CNC_MOVING";
+		}
+		else {
+			stateStr = GetCncStateString(state);
+		}
 
 		json << "{"
 			<< "\"status\":\"" << stateStr << "\","
-			<< "\"isMoving\":" << (m_cnc->IsMoving() ? "true" : "false") << ","
+			<< "\"isMoving\":" << (isMoving ? "true" : "false") << ","
 			<< "\"isDrivingRef\":" << (m_cnc->IsDrivingRef() ? "true" : "false") << ","
+			<< "\"isPositionReached\":" << (positionReached ? "true" : "false") << ","
 			<< "\"temperature\":" << m_cnc->GetTemperature()
 			<< "}";
 
