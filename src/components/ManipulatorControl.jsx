@@ -31,7 +31,7 @@ const ManipulatorControl = () => {
     isReferencing: false,
     axisCount: 0,
     currentPositions: [],
-    axisNames: []
+    axisNames: [],
   });
 
   const [showAxisPanel, setShowAxisPanel] = useState(true);
@@ -54,21 +54,20 @@ const ManipulatorControl = () => {
         // Initialize CNC - dispId 101
         await handler.initializeCnc;
         log("CNC initialized");
-        
+
         // Get axis info - dispId 108
         const axesInfo = JSON.parse(await handler.getAxesInfo);
         log("Axes info:", axesInfo);
 
         // Update state
-        setManipulatorState(prev => ({
+        setManipulatorState((prev) => ({
           ...prev,
           axisCount: axesInfo.axisCount,
           currentPositions: Array(axesInfo.axisCount).fill(0),
-          axisNames: axesInfo.axes.map(axis => axis.name)
+          axisNames: axesInfo.axes.map((axis) => axis.name),
         }));
 
         await updateStatus();
-
       } catch (err) {
         console.error("Failed to initialize CNC:", err);
         setError(err.message);
@@ -83,18 +82,18 @@ const ManipulatorControl = () => {
     try {
       const handler = getHandler();
       if (!handler) throw new Error("Device handler not available");
-  
+
       // Get status
       const status = JSON.parse(await handler.getCncStatus);
       log("CNC status:", status);
-  
+
       // Get positions with additional logging
       const positionsStr = await handler.getPositions;
       log("Raw positions string:", positionsStr);
       const positions = JSON.parse(positionsStr);
       log("Parsed positions:", positions);
-  
-      setManipulatorState(prev => ({
+
+      setManipulatorState((prev) => ({
         ...prev,
         status: status.status,
         isMoving: status.isMoving,
@@ -103,11 +102,10 @@ const ManipulatorControl = () => {
         isJoyEnabled: status.isJoyEnabled,
         isDoorOpen: status.isDoorOpen,
         isCollisionDetected: status.isCollisionDetected,
-        currentPositions: positions
+        currentPositions: positions,
       }));
-  
+
       setError(null);
-  
     } catch (err) {
       console.error("Failed to update status:", err);
       setError(err.message);
@@ -129,146 +127,158 @@ const ManipulatorControl = () => {
     }
   };
 
+  // 修改 handleMove 函数 - 使用与电压设置相同的模式
+  const handleMove = async () => {
+    if (editingAxis === null || moveValue === "") return;
 
-// 修改 handleMove 函数 - 使用与电压设置相同的模式
-const handleMove = async () => {
-  if (editingAxis === null || moveValue === "") return;
+    try {
+      const handler = getHandler();
+      if (!handler) throw new Error("Device handler not available");
 
-  try {
-    const handler = getHandler();
-    if (!handler) throw new Error("Device handler not available");
+      const axis = parseInt(editingAxis);
+      const increment = parseFloat(moveValue); // 这里改为增量值
 
-    const axis = parseInt(editingAxis);
-    const increment = parseFloat(moveValue); // 这里改为增量值
-    
-    // 获取当前位置
-    const currentPositions = JSON.parse(await handler.getPositions);
-    const currentPos = currentPositions[axis];
-    const targetPos = currentPos + increment; // 目标位置 = 当前位置 + 增量
+      // 获取当前位置
+      const currentPositions = JSON.parse(await handler.getPositions);
+      const currentPos = currentPositions[axis];
+      const targetPos = currentPos + increment; // 目标位置 = 当前位置 + 增量
 
-    console.log(`Moving axis ${axis} from ${currentPos} by ${increment} to ${targetPos}`);
+      console.log(
+        `Moving axis ${axis} from ${currentPos} by ${increment} to ${targetPos}`
+      );
 
-    // 执行移动
-    handler.targetPosition = `${axis},${targetPos}`;
+      // 执行移动
+      handler.targetPosition = `${axis},${targetPos}`;
 
-    // 等待移动开始
-    await new Promise(resolve => setTimeout(resolve, 100));
+      // 等待移动开始
+      await new Promise((resolve) => setTimeout(resolve, 100));
 
-    // 检查位置是否到达
-    let retryCount = 0;
-    const maxRetries = 100; // 最大等待10秒
-    
-    while (retryCount < maxRetries) {
-      await new Promise(resolve => setTimeout(resolve, 100));
-      
-      // 获取最新状态和位置
-      const status = JSON.parse(await handler.getCncStatus);
-      const positions = JSON.parse(await handler.getPositions);
-      const currentPosition = positions[axis];
-      
-      console.log(`Current status: ${status.status}, Position: ${currentPosition}, Target: ${targetPos}`);
-      
-      // 使用 positionReached 检查是否到达目标位置
-      const reached = await handler.positionReached;
-      console.log(`Position reached check: ${reached}`);
-      
-      if (reached) {
-        console.log("Target position reached!");
-        // 验证最终位置
-        const finalPositions = JSON.parse(await handler.getPositions);
-        console.log(`Final position for axis ${axis}: ${finalPositions[axis]}`);
-        break;
+      // 检查位置是否到达
+      let retryCount = 0;
+      const maxRetries = 100; // 最大等待10秒
+
+      while (retryCount < maxRetries) {
+        await new Promise((resolve) => setTimeout(resolve, 100));
+
+        // 获取最新状态和位置
+        const status = JSON.parse(await handler.getCncStatus);
+        const positions = JSON.parse(await handler.getPositions);
+        const currentPosition = positions[axis];
+
+        console.log(
+          `Current status: ${status.status}, Position: ${currentPosition}, Target: ${targetPos}`
+        );
+
+        // 使用 positionReached 检查是否到达目标位置
+        const reached = await handler.positionReached;
+        console.log(`Position reached check: ${reached}`);
+
+        if (reached) {
+          console.log("Target position reached!");
+          // 验证最终位置
+          const finalPositions = JSON.parse(await handler.getPositions);
+          console.log(
+            `Final position for axis ${axis}: ${finalPositions[axis]}`
+          );
+          break;
+        }
+
+        retryCount++;
+        console.log(`Retry count: ${retryCount}`);
       }
-      
-      retryCount++;
-      console.log(`Retry count: ${retryCount}`);
+
+      if (retryCount >= maxRetries) {
+        console.warn("Movement timeout");
+      }
+
+      await updateStatus();
+      setEditingAxis(null);
+      setMoveValue("");
+    } catch (err) {
+      console.error("Move operation failed:", err);
+      setError(err.message);
     }
+  };
 
-    if (retryCount >= maxRetries) {
-      console.warn("Movement timeout");
+  // 修改 handleReference 函数
+  const handleReference = async () => {
+    try {
+      const handler = getHandler();
+      if (!handler) throw new Error("Device handler not available");
+
+      setManipulatorState((prev) => ({
+        ...prev,
+        isReferencing: true,
+        status: "CNC_DRIVING_REF",
+      }));
+
+      // Start reference - dispId 102
+      await handler.startReference;
+      await updateStatus();
+
+      setError(null);
+    } catch (err) {
+      console.error("Reference operation failed:", err);
+      setError(err.message);
+    } finally {
+      setManipulatorState((prev) => ({
+        ...prev,
+        isReferencing: false,
+      }));
     }
+  };
 
-    await updateStatus();
-    setEditingAxis(null);
-    setMoveValue("");
-    
-  } catch (err) {
-    console.error("Move operation failed:", err);
-    setError(err.message);
-  }
-};
+  // handleStop 函数修改
+  const handleStop = async () => {
+    try {
+      const handler = getHandler();
+      if (!handler) throw new Error("Device handler not available");
 
-// 修改 handleReference 函数
-const handleReference = async () => {
-  try {
-    const handler = getHandler();
-    if (!handler) throw new Error("Device handler not available");
+      // 修改: 直接赋值
+      handler.stopAxis = ALL_AXIS;
 
-    setManipulatorState(prev => ({
+      await updateStatus();
+      setEditingAxis(null);
+      setMoveValue("");
+      setError(null);
+    } catch (err) {
+      console.error("Stop operation failed:", err);
+      setError(err.message);
+    }
+  };
+
+  // handleJoystickToggle 函数修改
+  const handleJoystickToggle = async () => {
+    try {
+      const handler = getHandler();
+      if (!handler) throw new Error("Device handler not available");
+
+      const currentState = manipulatorState.isJoyEnabled;
+      // 修改: 直接赋值
+      handler.joyEnabled = !currentState;
+
+      await updateStatus();
+      setError(null);
+    } catch (err) {
+      console.error("Joystick toggle failed:", err);
+      setError(err.message);
+    }
+  };
+
+  // 碰撞检测
+  // 修改碰撞检测切换函数为纯前端实现
+  const handleCollisionToggle = () => {
+    setManipulatorState((prev) => ({
       ...prev,
-      isReferencing: true,
-      status: "CNC_DRIVING_REF"
+      isCollisionDetected: !prev.isCollisionDetected,
     }));
+  };
 
-    // Start reference - dispId 102
-    await handler.startReference;
-    await updateStatus();
-
-    setError(null);
-
-  } catch (err) {
-    console.error("Reference operation failed:", err);
-    setError(err.message);
-  } finally {
-    setManipulatorState(prev => ({
-      ...prev,
-      isReferencing: false
-    }));
-  }
-};
-
-// handleStop 函数修改
-const handleStop = async () => {
-  try {
-    const handler = getHandler();
-    if (!handler) throw new Error("Device handler not available");
-
-    // 修改: 直接赋值
-    handler.stopAxis = ALL_AXIS;
-
-    await updateStatus();
-    setEditingAxis(null);
-    setMoveValue("");
-    setError(null);
-  } catch (err) {
-    console.error("Stop operation failed:", err);
-    setError(err.message);
-  }
-};
-
-// handleJoystickToggle 函数修改
-const handleJoystickToggle = async () => {
-  try {
-    const handler = getHandler();
-    if (!handler) throw new Error("Device handler not available");
-
-    const currentState = manipulatorState.isJoyEnabled;
-    // 修改: 直接赋值
-    handler.joyEnabled = !currentState;
-
-    await updateStatus();
-    setError(null);
-  } catch (err) {
-    console.error("Joystick toggle failed:", err);
-    setError(err.message);
-  }
-};
-
-// // 启用定时更新
-// useEffect(() => {
-//   const interval = setInterval(updateStatus, 200);  // 每200ms更新一次
-//   return () => clearInterval(interval);
-// }, []);
+  // // 启用定时更新
+  // useEffect(() => {
+  //   const interval = setInterval(updateStatus, 200);  // 每200ms更新一次
+  //   return () => clearInterval(interval);
+  // }, []);
 
   return (
     <div className="p-4 bg-gray-100 rounded-lg space-y-4">
@@ -336,7 +346,8 @@ const handleJoystickToggle = async () => {
               {manipulatorState.currentPositions.map((pos, index) => (
                 <div key={index} className="flex bg-gray-50 rounded border">
                   <div className="flex items-center px-2 font-medium">
-                    {manipulatorState.axisNames[index] || String.fromCharCode(65 + index)}
+                    {manipulatorState.axisNames[index] ||
+                      String.fromCharCode(65 + index)}
                   </div>
                   <div className="border-l border-gray-200 bg-white rounded-r flex-1">
                     {editingAxis === index ? (
@@ -344,7 +355,7 @@ const handleJoystickToggle = async () => {
                         type="text"
                         value={moveValue}
                         onChange={(e) => handleMoveValueChange(e.target.value)}
-                        onKeyDown={(e) => e.key === 'Enter' && handleMove()}
+                        onKeyDown={(e) => e.key === "Enter" && handleMove()}
                         className="w-full px-2 py-1 focus:outline-none text-sm"
                         placeholder="Enter position"
                         autoFocus
@@ -366,9 +377,13 @@ const handleJoystickToggle = async () => {
             <div className="mt-4 flex justify-end space-x-2">
               <button
                 onClick={handleMove}
-                disabled={editingAxis === null || manipulatorState.status === "CNC_NOT_READY"}
+                disabled={
+                  editingAxis === null ||
+                  manipulatorState.status === "CNC_NOT_READY"
+                }
                 className={`px-4 py-2 rounded ${
-                  editingAxis !== null && manipulatorState.status !== "CNC_NOT_READY"
+                  editingAxis !== null &&
+                  manipulatorState.status !== "CNC_NOT_READY"
                     ? "bg-blue-500 text-white hover:bg-blue-600"
                     : "bg-gray-200 text-gray-500 cursor-not-allowed"
                 }`}
@@ -410,16 +425,22 @@ const handleJoystickToggle = async () => {
           </span>
         </button>
 
-        <div 
-          className={`p-2 rounded ${
-            manipulatorState.isCollisionDetected
-              ? "text-red-500"
-              : "text-green-500"
+        <button
+          onClick={handleCollisionToggle}
+          className={`flex items-center gap-2 px-3 py-1.5 rounded ${
+            manipulatorState.status === "CNC_NOT_READY"
+              ? "bg-gray-200 text-gray-500 cursor-not-allowed"
+              : manipulatorState.isCollisionDetected
+              ? "bg-green-500 text-white"
+              : "bg-gray-200 hover:bg-gray-300"
           }`}
-          title="Collision Detection Status"
+          disabled={manipulatorState.status === "CNC_NOT_READY"}
         >
           <Radar className="w-6 h-6" />
-        </div>
+          <span className="text-sm">
+            {manipulatorState.isCollisionDetected ? "Enabled" : "Disabled"}
+          </span>
+        </button>
 
         <div
           className={`p-2 rounded ${

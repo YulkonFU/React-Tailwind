@@ -555,8 +555,6 @@ HRESULT DeviceHandler::GetCncStatus(VARIANT* pResult)
 		std::ostringstream json;
 		CNCZustand state = static_cast<CNCZustand>(m_cnc->Zustand());
 		bool isMoving = m_cnc->IsMoving();
-
-		// 修改：不带参数的 PositionReached
 		bool positionReached = m_cnc->PositionReached();
 
 		// 根据实际状态确定显示状态
@@ -571,11 +569,19 @@ HRESULT DeviceHandler::GetCncStatus(VARIANT* pResult)
 			stateStr = GetCncStateString(state);
 		}
 
+		// 获取各种状态
+		bool isDoorClosed = m_cnc->IsInterlockClosed();      // 门状态
+		bool isJoyEnabled = !m_cnc->AllJoyDisabled();        // 摇杆状态
+		bool isCollisionDetectionEnabled = !m_cnc->IsHWCollDetDisabled(); // 碰撞检测状态
+
 		json << "{"
 			<< "\"status\":\"" << stateStr << "\","
 			<< "\"isMoving\":" << (isMoving ? "true" : "false") << ","
 			<< "\"isDrivingRef\":" << (m_cnc->IsDrivingRef() ? "true" : "false") << ","
 			<< "\"isPositionReached\":" << (positionReached ? "true" : "false") << ","
+			<< "\"isJoyEnabled\":" << (isJoyEnabled ? "true" : "false") << ","
+			<< "\"isDoorOpen\":" << (!isDoorClosed ? "true" : "false") << ","
+			<< "\"isCollisionDetected\":" << (!isCollisionDetectionEnabled ? "true" : "false") << ","
 			<< "\"temperature\":" << m_cnc->GetTemperature()
 			<< "}";
 
