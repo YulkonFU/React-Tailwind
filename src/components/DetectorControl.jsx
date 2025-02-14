@@ -8,7 +8,6 @@ import {
   ChevronDown,
   BarChart2,
 } from "lucide-react";
-import { imageDataService } from "../services/ImageDataService";
 
 const IMAGE_FILTERS = [
   "Average",
@@ -33,7 +32,7 @@ const IMAGE_FILTERS = [
 ];
 
 const DetectorControl = () => {
-  // 图像采集状态
+  // 探测器状态
   const [acquisitionState, setAcquisitionState] = useState({
     isLive: false,
     isIntegrating: false,
@@ -49,7 +48,14 @@ const DetectorControl = () => {
     contrast: 100,
   });
 
-  // 图像处理状态
+  // 图像状态
+  const [imageState, setImageState] = useState({
+    data: null,
+    width: 0,
+    height: 0,
+  });
+
+  // UI状态
   const [selectedFilters, setSelectedFilters] = useState([
     "none",
     "none",
@@ -63,50 +69,55 @@ const DetectorControl = () => {
     processing: true,
   });
 
-  // Acquire Live 控制
-  const toggleLive = async () => {
-    setAcquisitionState((prev) => {
-      const newState = { ...prev, isLive: !prev.isLive };
-
-      if (newState.isLive) {
-        startLiveCapture();
-      } else {
-        stopLiveCapture();
-      }
-
-      return newState;
-    });
-  };
-
-  // 添加实时采集函数
-  let captureInterval = null;
-
-  const startLiveCapture = () => {
-    captureInterval = setInterval(async () => {
+  // 初始化探测器
+  useEffect(() => {
+    const initDetector = async () => {
       try {
-        const imageData = await imageDataService.getImageData(1024, 1024);
-        // 处理获取到的图像数据
-        // TODO: 更新显示或处理
-      } catch (error) {
-        console.error("Live capture error:", error);
-        stopLiveCapture();
-      }
-    }, 1000 / acquisitionState.fps);
-  };
+        const handler = window.chrome?.webview?.hostObjects?.deviceHandler;
+        if (!handler) return;
 
-  const stopLiveCapture = () => {
-    if (captureInterval) {
-      clearInterval(captureInterval);
-      captureInterval = null;
+        await handler.initializeDetector;
+
+        // 监听新帧消息
+        window.chrome?.webview?.addEventListener("message", (event) => {
+          const message = JSON.parse(event.data);
+          if (message.type === "newFrame") {
+            setImageState({
+              data: message.imageData,
+              width: message.width,
+              height: message.height,
+            });
+          }
+        });
+      } catch (error) {
+        console.error("Failed to initialize detector:", error);
+      }
+    };
+
+    initDetector();
+  }, []);
+
+  // 实时采集控制
+  const toggleLive = async () => {
+    try {
+      const handler = window.chrome?.webview?.hostObjects?.deviceHandler;
+      if (!handler) return;
+
+      if (!acquisitionState.isLive) {
+        await handler.setFPS(acquisitionState.fps);
+        await handler.startLive;
+      } else {
+        await handler.stopLive;
+      }
+
+      setAcquisitionState((prev) => ({
+        ...prev,
+        isLive: !prev.isLive,
+      }));
+    } catch (error) {
+      console.error("Failed to toggle live mode:", error);
     }
   };
-
-  // 在组件卸载时清理
-  useEffect(() => {
-    return () => {
-      stopLiveCapture();
-    };
-  }, []);
 
   // 积分控制
   const handleIntegrationChange = (frames) => {
@@ -117,22 +128,38 @@ const DetectorControl = () => {
   };
 
   // FPS 控制
-  const handleFpsChange = (value) => {
-    setAcquisitionState((prev) => ({
-      ...prev,
-      fps: value,
-    }));
+  const handleFpsChange = async (value) => {
+    try {
+      const handler = window.chrome?.webview?.hostObjects?.deviceHandler;
+      if (!handler) return;
+
+      await handler.setFPS(value);
+      setAcquisitionState((prev) => ({
+        ...prev,
+        fps: value,
+      }));
+    } catch (error) {
+      console.error("Failed to set FPS:", error);
+    }
   };
 
-  // Camera Gain 控制
-  const handleGainChange = (value) => {
-    setAcquisitionState((prev) => ({
-      ...prev,
-      gain: value,
-    }));
+  // 增益控制
+  const handleGainChange = async (value) => {
+    try {
+      const handler = window.chrome?.webview?.hostObjects?.deviceHandler;
+      if (!handler) return;
+
+      await handler.setGain(value);
+      setAcquisitionState((prev) => ({
+        ...prev,
+        gain: value,
+      }));
+    } catch (error) {
+      console.error("Failed to set gain:", error);
+    }
   };
 
-  // 图像滤镜控制
+  // 滤镜控制
   const handleFilterChange = (index, value) => {
     const newFilters = [...selectedFilters];
     newFilters[index] = value;
@@ -140,7 +167,7 @@ const DetectorControl = () => {
     setFilterHistory([...filterHistory, selectedFilters]);
   };
 
-  // 重置/撤销
+  // 撤销滤镜
   const handleUndo = () => {
     if (filterHistory.length > 0) {
       const previousState = filterHistory[filterHistory.length - 1];
@@ -151,13 +178,32 @@ const DetectorControl = () => {
     }
   };
 
-  // 切换面板展开/收起
+  // 面板展开/收起控制
   const toggleSection = (section) => {
     setExpandedSections((prev) => ({
       ...prev,
       [section]: !prev[section],
     }));
   };
+
+  // 新增事件发布
+  useEffect(() => {
+    window.chrome?.webview?.addEventListener("message", (event) => {
+      const message = JSON.parse(event.data);
+      if (message.type === "newFrame") {
+        // 发布新帧事件,供主窗口处理
+        window.dispatchEvent(
+          new CustomEvent("detectorFrame", {
+            detail: {
+              data: message.imageData,
+              width: message.width,
+              height: message.height,
+            },
+          })
+        );
+      }
+    });
+  }, []);
 
   return (
     <div className="space-y-4">
@@ -174,7 +220,7 @@ const DetectorControl = () => {
             }`}
           />
         </div>
-
+  
         {expandedSections.acquire && (
           <div className="p-4 space-y-4">
             <div className="grid grid-cols-2 gap-4">
@@ -194,13 +240,11 @@ const DetectorControl = () => {
                 )}
                 F2 Live
               </button>
-
+  
               {/* Integration Control */}
               <select
                 value={acquisitionState.integrationFrames}
-                onChange={(e) =>
-                  handleIntegrationChange(parseInt(e.target.value))
-                }
+                onChange={(e) => handleIntegrationChange(parseInt(e.target.value))}
                 className="px-3 py-2 bg-gray-200 rounded"
               >
                 <option value={1}>No Integration</option>
@@ -209,7 +253,7 @@ const DetectorControl = () => {
                 <option value={8}>8 Frames</option>
               </select>
             </div>
-
+  
             {/* Advanced Controls */}
             <div className="space-y-4">
               {/* FPS Control */}
@@ -230,7 +274,7 @@ const DetectorControl = () => {
                   className="w-full"
                 />
               </div>
-
+  
               {/* Camera Gain */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
@@ -256,7 +300,7 @@ const DetectorControl = () => {
           </div>
         )}
       </div>
-
+  
       {/* Image Display Section */}
       <div className="bg-white border rounded-lg">
         <div
@@ -270,7 +314,7 @@ const DetectorControl = () => {
             }`}
           />
         </div>
-
+  
         {expandedSections.display && (
           <div className="p-4 space-y-4">
             {/* Histogram Display */}
@@ -291,9 +335,13 @@ const DetectorControl = () => {
                 />
               </div>
             </div>
-
+  
             {/* Brightness/Contrast Controls */}
             <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-sm">Brightness</span>
+                <span className="text-sm">{acquisitionState.brightness}%</span>
+              </div>
               <input
                 type="range"
                 min="0"
@@ -308,10 +356,30 @@ const DetectorControl = () => {
                 className="w-full"
               />
             </div>
+  
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-sm">Contrast</span>
+                <span className="text-sm">{acquisitionState.contrast}%</span>
+              </div>
+              <input
+                type="range"
+                min="0"
+                max="200"
+                value={acquisitionState.contrast}
+                onChange={(e) =>
+                  setAcquisitionState((prev) => ({
+                    ...prev,
+                    contrast: parseInt(e.target.value),
+                  }))
+                }
+                className="w-full"
+              />
+            </div>
           </div>
         )}
       </div>
-
+  
       {/* Image Processing Section */}
       <div className="bg-white border rounded-lg">
         <div
@@ -325,7 +393,7 @@ const DetectorControl = () => {
             }`}
           />
         </div>
-
+  
         {expandedSections.processing && (
           <div className="p-4 space-y-2">
             {/* Filter Controls */}
@@ -348,7 +416,7 @@ const DetectorControl = () => {
                 </div>
               </div>
             ))}
-
+  
             {/* Undo Button */}
             <button
               onClick={handleUndo}
