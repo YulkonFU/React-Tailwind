@@ -11,7 +11,7 @@ const char* GetXrayStateString(CXray::XR_STATE state);
 const char* GetCncStateString(CNCZustand state);
 
 DeviceHandler::DeviceHandler() : m_xray(nullptr), m_cnc(nullptr),
-m_hXrayDll(nullptr), m_hCncDll(nullptr), positions(nullptr), axisCount(0)
+m_hXrayDll(nullptr), m_hCncDll(nullptr), positions(nullptr), axisCount(0),m_isMonitoring(false)
 {
 	try {
 		// Initialize Xray
@@ -50,6 +50,25 @@ m_hXrayDll(nullptr), m_hCncDll(nullptr), positions(nullptr), axisCount(0)
 			OutputDebugString(debug.c_str());
 		}
 
+		//初始化Dig
+		m_dig = CDigGrabber::GetAndInitDigGrabber();
+		if (!m_dig ) {
+			/*if (m_cnc) {
+				delete m_cnc;
+				m_cnc = nullptr;
+			}*/
+			throw std::runtime_error("Failed to initialize detector");
+		}
+
+		auto g_nImgSizeX = m_dig->GetActGrabbedImageSize().cx; // Anzahl Pixel X
+		auto g_nImgSizeY = m_dig->GetActGrabbedImageSize().cy; // Anzahl Pixel Y
+		auto g_nBitsPerPx = m_dig->GrabbedBits(); // Bits pro Pixel 8..16
+		OutputDebugString(L"Dig test\n");
+		OutputDebugString(std::to_wstring(g_nImgSizeX).c_str());
+		OutputDebugString(std::to_wstring(g_nImgSizeY).c_str());
+		OutputDebugString(std::to_wstring(g_nBitsPerPx).c_str());
+
+
 
 	}
 	catch (...) {
@@ -61,32 +80,42 @@ m_hXrayDll(nullptr), m_hCncDll(nullptr), positions(nullptr), axisCount(0)
 
 DeviceHandler::~DeviceHandler()
 {
-	if (m_xray) {
-		try {
-			if (m_xray->IsBeamOn()) {
-				m_xray->TurnOff();
+	// 首先停止监控线程
+	StopMonitoring();
+
+	{
+		std::lock_guard<std::mutex> lock(m_mutex);  // 添加互斥锁保护
+
+		// 然后清理其他资源
+		if (m_xray) {
+			try {
+				if (m_xray->IsBeamOn()) {
+					m_xray->TurnOff();
+				}
+				m_xray->Close();
+				delete m_xray;
+				m_xray = nullptr;
 			}
-			m_xray->Close();
-			delete m_xray;
+			catch (...) {}
 		}
-		catch (...) {}
-	}
 
-	if (m_cnc) {
-		try {
-			m_cnc->Close();
-			delete m_cnc;
+		if (m_cnc) {
+			try {
+				m_cnc->Close();
+				delete m_cnc;
+				m_cnc = nullptr;
+			}
+			catch (...) {}
 		}
-		catch (...) {}
+
+		// 释放 positions 的内存
+		delete[] positions;
+		positions = nullptr;
+
+		UnloadXrayDll();
+		UnloadCncDll();
 	}
-
-	// 释放 positions 的内存
-	delete[] positions;
-
-	UnloadXrayDll();
-	UnloadCncDll();
 }
-
 
 STDMETHODIMP DeviceHandler::Invoke(DISPID dispIdMember, REFIID riid, LCID lcid,
 	WORD wFlags, DISPPARAMS* pDispParams, VARIANT* pVarResult,
@@ -385,6 +414,16 @@ bool DeviceHandler::LoadCncDll()
 	return true;
 }
 
+bool DeviceHandler::LoadDigDll()
+{
+	m_hDigDll = LoadLibrary(L"DigGrabberDllx64.dll");
+	if (!m_hDigDll) {
+		m_hDigDll = LoadLibrary(L"bin\\DigGrabberDllx64.dll");
+		if (!m_hDigDll) return false;
+	}
+	return true;
+}
+
 void DeviceHandler::UnloadXrayDll()
 {
 	if (m_hXrayDll) {
@@ -600,9 +639,14 @@ HRESULT DeviceHandler::GetCncStatus(VARIANT* pResult)
 HRESULT DeviceHandler::GetXrayStatus(VARIANT* pResult)
 {
 	OutputDebugString(L"GetXrayStatus called\n");
-	if (!pResult)
+	if (!pResult || !m_xray)  // 检查 m_xray 是否有效
 		return E_INVALIDARG;
+
 	try {
+		std::lock_guard<std::mutex> lock(m_mutex);  // 添加互斥锁保护
+
+		if (!m_xray) return E_POINTER;  // 双重检查
+
 		std::ostringstream json;
 		CXray::XR_STATE state = m_xray->State();
 		const char* stateStr = GetXrayStateString(state);
@@ -619,11 +663,82 @@ HRESULT DeviceHandler::GetXrayStatus(VARIANT* pResult)
 		std::wstring wstr = ConvertToWString(json.str());
 		pResult->vt = VT_BSTR;
 		pResult->bstrVal = SysAllocString(wstr.c_str());
+
 		OutputDebugString(L"GetXrayStatus succeeded\n");
 		OutputDebugString(wstr.c_str());
+
 		return S_OK;
 	}
 	catch (...) {
 		return E_FAIL;
+	}
+}
+
+void DeviceHandler::MonitorThreadFunc() {
+	while (m_isMonitoring) {
+		try {
+			std::lock_guard<std::mutex> lock(m_mutex);  // 添加互斥锁保护
+
+			if (!m_cnc || !m_xray || !m_webView) {
+				std::this_thread::sleep_for(std::chrono::milliseconds(200));
+				continue;
+			}
+
+			// 获取CNC状态
+			VARIANT cncStatus;
+			VariantInit(&cncStatus);
+			if (m_cnc) {  // 再次检查指针
+				HRESULT hr = GetCncStatus(&cncStatus);
+				if (SUCCEEDED(hr)) {
+					m_webView->PostWebMessageAsJson(cncStatus.bstrVal);
+					VariantClear(&cncStatus);
+				}
+			}
+
+			// 获取Xray状态
+			VARIANT xrayStatus;
+			VariantInit(&xrayStatus);
+			if (m_xray) {  // 再次检查指针
+				HRESULT hr = GetXrayStatus(&xrayStatus);
+				if (SUCCEEDED(hr)) {
+					m_webView->PostWebMessageAsJson(xrayStatus.bstrVal);
+					VariantClear(&xrayStatus);
+				}
+			}
+
+		}
+		catch (const std::exception& e) {
+			OutputDebugStringA(("Monitor thread error: " + std::string(e.what())).c_str());
+		}
+		catch (...) {
+			OutputDebugString(L"Unknown error in monitor thread\n");
+		}
+
+		// 释放锁后等待
+		std::this_thread::sleep_for(std::chrono::milliseconds(200));
+	}
+}
+
+void DeviceHandler::StartMonitoring(ICoreWebView2* webView) {
+	if (m_isMonitoring) return;
+
+	m_webView = webView;
+	m_isMonitoring = true;
+	m_monitorThread = std::thread(&DeviceHandler::MonitorThreadFunc, this);
+}
+
+void DeviceHandler::StopMonitoring() {
+	{
+		std::lock_guard<std::mutex> lock(m_mutex);
+		m_isMonitoring = false;
+	}
+
+	if (m_monitorThread.joinable()) {
+		m_monitorThread.join();
+	}
+
+	{
+		std::lock_guard<std::mutex> lock(m_mutex);
+		m_webView = nullptr;
 	}
 }

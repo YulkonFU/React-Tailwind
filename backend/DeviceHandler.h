@@ -3,28 +3,28 @@
 #include <windows.h>
 #include <WebView2.h>
 #include <wrl.h>
+#include <wil/com.h>
 #include <string>
+#include <mutex>    
+#include <thread>   
 #include "Xray.h"
 #include "Cnc.h"
-#include "DeviceHandler_i.h"  // 使用MIDL生成的接口定义
+#include "DigGrabberDll.h"
 
-class DeviceHandler :
-    public Microsoft::WRL::RuntimeClass<
+class DeviceHandler : public Microsoft::WRL::RuntimeClass<
     Microsoft::WRL::RuntimeClassFlags<Microsoft::WRL::ClassicCom>,
-    IDeviceHandler,
-    IDispatch>
-{
+    IDispatch> {
+
 private:
     // Device instances
     CXray* m_xray;
     CCnc* m_cnc;
+    CDigGrabber* m_dig;
 
     // DLL handles  
     HMODULE m_hXrayDll;
     HMODULE m_hCncDll;
-
-    // Type library
-    ITypeLib* m_typeLib;
+    HMODULE m_hDigDll;
 
     // Axis information
     double* positions;
@@ -33,42 +33,56 @@ private:
     // Helper methods
     bool LoadXrayDll();
     bool LoadCncDll();
+    bool LoadDigDll();
     void UnloadXrayDll();
     void UnloadCncDll();
     std::wstring ConvertToWString(const std::string& str);
+
+    // 添加线程相关成员
+    std::thread m_monitorThread;
+    bool m_isMonitoring;
+    std::mutex m_mutex;
+    wil::com_ptr<ICoreWebView2> m_webView;
+
+    // 监控线程函数
+    void MonitorThreadFunc();
+
+
 
 public:
     DeviceHandler();
     ~DeviceHandler();
 
+    // 线程控制方法
+    void StartMonitoring(ICoreWebView2* webView);
+    void StopMonitoring();
+
     // IDispatch Methods
-    STDMETHOD(GetTypeInfoCount)(UINT* pctinfo);
-    STDMETHOD(GetTypeInfo)(UINT iTInfo, LCID lcid, ITypeInfo** ppTInfo);
+    STDMETHOD(GetTypeInfoCount)(UINT* pctinfo) override;
+    STDMETHOD(GetTypeInfo)(UINT iTInfo, LCID lcid, ITypeInfo** ppTInfo) override;
     STDMETHOD(GetIDsOfNames)(REFIID riid, LPOLESTR* rgszNames, UINT cNames,
-        LCID lcid, DISPID* rgDispId);
+        LCID lcid, DISPID* rgDispId) override;
     STDMETHOD(Invoke)(DISPID dispIdMember, REFIID riid, LCID lcid,
         WORD wFlags, DISPPARAMS* pDispParams, VARIANT* pVarResult,
-        EXCEPINFO* pExcepInfo, UINT* puArgErr);
+        EXCEPINFO* pExcepInfo, UINT* puArgErr) override;
 
-    // IDeviceHandler Methods
     // Xray Control Methods
-    STDMETHOD(InitializeXray)();
-    STDMETHOD(StartWarmup)();
-    STDMETHOD(SetVoltage)(INT kV);
-    STDMETHOD(SetCurrent)(INT uA);
-    STDMETHOD(SetFocus)(INT mode);
-    STDMETHOD(TurnXrayOn)();
-    STDMETHOD(TurnXrayOff)();
-    STDMETHOD(GetXrayStatus)(VARIANT* pResult);
+    HRESULT InitializeXray();
+    HRESULT SetVoltage(int kV);
+    HRESULT SetCurrent(int uA);
+    HRESULT SetFocus(int mode);
+    HRESULT TurnXrayOn();
+    HRESULT TurnXrayOff();
+    HRESULT GetXrayStatus(VARIANT* pResult);
 
     // CNC Control Methods
-    STDMETHOD(InitializeCnc)();
-    STDMETHOD(StartReference)(INT axisIndex);
-    STDMETHOD(MoveAxis)(INT axisIndex, DOUBLE position);
-    STDMETHOD(MoveAllAxes)(SAFEARRAY* positions);
-    STDMETHOD(Stop)(INT axisIndex);
-    STDMETHOD(EnableJoy)(INT axisIndex, BOOL enable);
-    STDMETHOD(GetCncStatus)(VARIANT* pResult);
-    STDMETHOD(GetAxesInfo)(VARIANT* pResult);
-    STDMETHOD(GetPositions)(VARIANT* pResult);
+    HRESULT InitializeCnc();
+    HRESULT StartReference(int axisIndex = -1);
+    HRESULT MoveAxis(int axisIndex, double position);
+    HRESULT MoveAllAxes(double positions[]);
+    HRESULT Stop(int axisIndex = -1);
+    HRESULT EnableJoy(int axisIndex = -1, bool enable = true);
+    HRESULT GetCncStatus(VARIANT* pResult);
+    HRESULT GetAxesInfo(VARIANT* pResult);
+    HRESULT GetPositions(VARIANT* pResult);
 };

@@ -158,24 +158,49 @@ void InitializeWebView2(HWND hWnd) {
                             settings->put_IsWebMessageEnabled(TRUE);
                             settings->put_AreDevToolsEnabled(TRUE);
 
+                            
                             // 注册 DeviceHandler
                             try {
                                 deviceHandler = Microsoft::WRL::Make<DeviceHandler>();
-                                if (deviceHandler && webViewWindow) {
-                                    VARIANT var;
-                                    VariantInit(&var);
-                                    var.vt = VT_DISPATCH;
-                                    var.pdispVal = deviceHandler.Get();
-
-                                    // 添加为同步对象
-                                    HRESULT hr = webViewWindow->AddHostObjectToScript(L"deviceHandler", &var);
-                                    if (FAILED(hr)) {
-                                        OutputDebugString(L"Failed to register deviceHandler\n");
-                                        return hr;
-                                    }
-                                    VariantClear(&var);
-                                    OutputDebugString(L"Successfully registered deviceHandler\n");
+                                if (!deviceHandler) {
+                                    OutputDebugString(L"Failed to create DeviceHandler\n");
+                                    return E_FAIL;
                                 }
+
+                                // 添加为同步对象
+                                VARIANT var;
+                                VariantInit(&var);
+                                var.vt = VT_DISPATCH;
+                                var.pdispVal = deviceHandler.Get();
+
+                                HRESULT hr = webViewWindow->AddHostObjectToScript(L"deviceHandler", &var);
+                                VariantClear(&var);
+
+                                if (FAILED(hr)) {
+                                    OutputDebugString(L"Failed to register deviceHandler\n");
+                                    return hr;
+                                }
+
+                                OutputDebugString(L"Successfully registered deviceHandler\n");
+
+                                // 成功注册后，再启动监控
+                                try {
+                                    deviceHandler->StartMonitoring(webViewWindow.get());
+                                    OutputDebugString(L"Successfully started monitoring\n");
+                                }
+                                catch (const std::exception& e) {
+                                    OutputDebugStringA(("Failed to start monitoring: " + std::string(e.what())).c_str());
+                                    return E_FAIL;
+                                }
+
+                                // 设置窗口大小
+                                RECT bounds;
+                                GetClientRect(hWnd, &bounds);
+                                controller->put_Bounds(bounds);
+
+                                // 导航到本地页面
+                                webViewWindow->Navigate(L"http://localhost:5173/");
+                                return S_OK;
                             }
                             catch (const std::exception& e) {
                                 OutputDebugStringA(e.what());
@@ -185,6 +210,7 @@ void InitializeWebView2(HWND hWnd) {
                                 OutputDebugString(L"Unknown exception during DeviceHandler creation\n");
                                 return E_FAIL;
                             }
+
 
                             // 设置窗口大小
                             RECT bounds;
