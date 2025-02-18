@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { detectorService } from "../services/DetectorService";
 import {
   Play,
   Square,
@@ -69,24 +70,30 @@ const DetectorControl = () => {
     processing: true,
   });
 
-  // 初始化探测器
+  //初始化探测器的代码
   useEffect(() => {
     const initDetector = async () => {
       try {
         const handler = window.chrome?.webview?.hostObjects?.deviceHandler;
         if (!handler) return;
 
+        // 直接调用方法
         await handler.initializeDetector;
 
         // 监听新帧消息
         window.chrome?.webview?.addEventListener("message", (event) => {
           const message = JSON.parse(event.data);
           if (message.type === "newFrame") {
-            setImageState({
-              data: message.imageData,
-              width: message.width,
-              height: message.height,
-            });
+            // 发布新帧事件给主窗口
+            window.dispatchEvent(
+              new CustomEvent("detectorFrame", {
+                detail: {
+                  data: message.imageData,
+                  width: message.width,
+                  height: message.height,
+                },
+              })
+            );
           }
         });
       } catch (error) {
@@ -100,14 +107,20 @@ const DetectorControl = () => {
   // 实时采集控制
   const toggleLive = async () => {
     try {
-      const handler = window.chrome?.webview?.hostObjects?.deviceHandler;
-      if (!handler) return;
-
       if (!acquisitionState.isLive) {
-        await handler.setFPS(acquisitionState.fps);
-        await handler.startLive;
+        // 使用 detectorService 而不是直接调用 handler
+        try {
+          // 设置 FPS
+          await detectorService.setFPS(acquisitionState.fps);
+          // 开始采集
+          const result = await detectorService.startLive();
+          console.log("startLive result:", result);
+        } catch (error) {
+          console.error("startLive error:", error);
+          throw error;
+        }
       } else {
-        await handler.stopLive;
+        await detectorService.stopLive();
       }
 
       setAcquisitionState((prev) => ({
@@ -119,21 +132,10 @@ const DetectorControl = () => {
     }
   };
 
-  // 积分控制
-  const handleIntegrationChange = (frames) => {
-    setAcquisitionState((prev) => ({
-      ...prev,
-      integrationFrames: frames,
-    }));
-  };
-
-  // FPS 控制
+  // 同样修改 FPS 控制
   const handleFpsChange = async (value) => {
     try {
-      const handler = window.chrome?.webview?.hostObjects?.deviceHandler;
-      if (!handler) return;
-
-      await handler.setFPS(value);
+      await detectorService.setFPS(value);
       setAcquisitionState((prev) => ({
         ...prev,
         fps: value,
@@ -143,13 +145,10 @@ const DetectorControl = () => {
     }
   };
 
-  // 增益控制
+  // 修改增益控制
   const handleGainChange = async (value) => {
     try {
-      const handler = window.chrome?.webview?.hostObjects?.deviceHandler;
-      if (!handler) return;
-
-      await handler.setGain(value);
+      await detectorService.setGain(value);
       setAcquisitionState((prev) => ({
         ...prev,
         gain: value,
@@ -157,6 +156,14 @@ const DetectorControl = () => {
     } catch (error) {
       console.error("Failed to set gain:", error);
     }
+  };
+
+  // 积分控制
+  const handleIntegrationChange = (frames) => {
+    setAcquisitionState((prev) => ({
+      ...prev,
+      integrationFrames: frames,
+    }));
   };
 
   // 滤镜控制
@@ -220,7 +227,7 @@ const DetectorControl = () => {
             }`}
           />
         </div>
-  
+
         {expandedSections.acquire && (
           <div className="p-4 space-y-4">
             <div className="grid grid-cols-2 gap-4">
@@ -240,11 +247,13 @@ const DetectorControl = () => {
                 )}
                 F2 Live
               </button>
-  
+
               {/* Integration Control */}
               <select
                 value={acquisitionState.integrationFrames}
-                onChange={(e) => handleIntegrationChange(parseInt(e.target.value))}
+                onChange={(e) =>
+                  handleIntegrationChange(parseInt(e.target.value))
+                }
                 className="px-3 py-2 bg-gray-200 rounded"
               >
                 <option value={1}>No Integration</option>
@@ -253,7 +262,7 @@ const DetectorControl = () => {
                 <option value={8}>8 Frames</option>
               </select>
             </div>
-  
+
             {/* Advanced Controls */}
             <div className="space-y-4">
               {/* FPS Control */}
@@ -274,7 +283,7 @@ const DetectorControl = () => {
                   className="w-full"
                 />
               </div>
-  
+
               {/* Camera Gain */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
@@ -300,7 +309,7 @@ const DetectorControl = () => {
           </div>
         )}
       </div>
-  
+
       {/* Image Display Section */}
       <div className="bg-white border rounded-lg">
         <div
@@ -314,7 +323,7 @@ const DetectorControl = () => {
             }`}
           />
         </div>
-  
+
         {expandedSections.display && (
           <div className="p-4 space-y-4">
             {/* Histogram Display */}
@@ -335,7 +344,7 @@ const DetectorControl = () => {
                 />
               </div>
             </div>
-  
+
             {/* Brightness/Contrast Controls */}
             <div className="space-y-2">
               <div className="flex items-center justify-between">
@@ -356,7 +365,7 @@ const DetectorControl = () => {
                 className="w-full"
               />
             </div>
-  
+
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <span className="text-sm">Contrast</span>
@@ -379,7 +388,7 @@ const DetectorControl = () => {
           </div>
         )}
       </div>
-  
+
       {/* Image Processing Section */}
       <div className="bg-white border rounded-lg">
         <div
@@ -393,7 +402,7 @@ const DetectorControl = () => {
             }`}
           />
         </div>
-  
+
         {expandedSections.processing && (
           <div className="p-4 space-y-2">
             {/* Filter Controls */}
@@ -416,7 +425,7 @@ const DetectorControl = () => {
                 </div>
               </div>
             ))}
-  
+
             {/* Undo Button */}
             <button
               onClick={handleUndo}

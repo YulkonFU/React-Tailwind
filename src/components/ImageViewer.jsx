@@ -1,21 +1,125 @@
+// ImageViewer.jsx
 import { useEffect, useRef, forwardRef, useState, useImperativeHandle } from "react";
 import * as PIXI from "pixi.js";
 import PropTypes from "prop-types";
 import OverlayCanvas from "./OverlayCanvas";
+import { detectorService } from "../services/DetectorService";
 
 const ImageViewer = forwardRef(({ 
   showOverlay: initialShowOverlay = true, 
-  isDrawingEnabled = false,
-  imageData,
-  width,
-  height 
+  isDrawingEnabled = false
 }, ref) => {
     const pixiContainerRef = useRef(null);
     const pixiAppRef = useRef(null);
     const spriteRef = useRef(null);
     const overlayRef = useRef(null);
     const [showOverlay, setShowOverlay] = useState(initialShowOverlay);
+    const [imageState, setImageState] = useState({
+        data: null,
+        width: 0,
+        height: 0
+    });
 
+    // 初始化 PIXI
+    useEffect(() => {
+        const initPixiApp = async () => {
+            if (!pixiAppRef.current && pixiContainerRef.current) {
+                const app = new PIXI.Application();
+                await app.init({
+                    width: pixiContainerRef.current.clientWidth,
+                    height: pixiContainerRef.current.clientHeight,
+                    backgroundColor: 0x000000,
+                    antialias: true,
+                    clearBeforeRender: true,
+                    powerPreference: "high-performance",
+                    hello: true,
+                    resizeTo: pixiContainerRef.current,
+                });
+
+                pixiAppRef.current = app;
+                pixiContainerRef.current.appendChild(app.canvas);
+            }
+        };
+
+        initPixiApp();
+
+        return () => {
+            if (pixiAppRef.current) {
+                pixiAppRef.current.destroy(true, {
+                    children: true,
+                    texture: true,
+                    baseTexture: true,
+                });
+                pixiAppRef.current = null;
+            }
+        };
+    }, []);
+
+    // 设置探测器服务回调
+    useEffect(() => {
+        detectorService.onNewFrame((imageData, width, height) => {
+            setImageState({
+                data: imageData,
+                width,
+                height
+            });
+        });
+
+        return () => {
+            detectorService.onNewFrame(null);
+        };
+    }, []);
+
+    // 更新图像显示
+    useEffect(() => {
+        if (!imageState.data) return;
+    
+        const updateTexture = () => {
+            const { data, width, height } = imageState;
+            const canvas = document.createElement("canvas");
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext("2d");
+    
+            const imgData = ctx.createImageData(width, height);
+            for (let i = 0; i < data.length; i++) {
+                const idx = i * 4;
+                const value = Math.floor((data[i] / 65535) * 255); // 16位转8位
+                imgData.data[idx] = value;     // R
+                imgData.data[idx + 1] = value; // G
+                imgData.data[idx + 2] = value; // B
+                imgData.data[idx + 3] = 255;   // A
+            }
+    
+            ctx.putImageData(imgData, 0, 0);
+            
+            // 更新或创建精灵
+            const texture = PIXI.Texture.from(canvas);
+            if (spriteRef.current) {
+                spriteRef.current.texture.destroy(true);
+                spriteRef.current.texture = texture;
+            } else {
+                const sprite = new PIXI.Sprite(texture);
+                const scaleX = pixiAppRef.current.screen.width / width;
+                const scaleY = pixiAppRef.current.screen.height / height;
+                const scale = Math.min(scaleX, scaleY) * 0.9;
+
+                sprite.scale.set(scale);
+                sprite.x = pixiAppRef.current.screen.width / 2;
+                sprite.y = pixiAppRef.current.screen.height / 2;
+                sprite.anchor.set(0.5);
+                sprite.interactive = true;
+                sprite.cursor = "pointer";
+
+                pixiAppRef.current.stage.addChild(sprite);
+                spriteRef.current = sprite;
+            }
+        };
+
+        updateTexture();
+    }, [imageState]);
+
+    // 组件接口
     useImperativeHandle(ref, () => ({
         saveImage: (options = { includeOverlay: true, filename: "image.png" }) => {
             const canvas = document.createElement("canvas");
@@ -49,86 +153,6 @@ const ImageViewer = forwardRef(({
         },
     }));
 
-    useEffect(() => {
-        const updatePixiApp = async () => {
-            try {
-                if (!pixiAppRef.current) {
-                    const app = new PIXI.Application();
-                    await app.init({
-                        width: pixiContainerRef.current.clientWidth,
-                        height: pixiContainerRef.current.clientHeight,
-                        backgroundColor: 0x000000,
-                        antialias: true,
-                        clearBeforeRender: true,
-                        powerPreference: "high-performance",
-                        hello: true,
-                        resizeTo: pixiContainerRef.current,
-                    });
-
-                    pixiAppRef.current = app;
-                    pixiContainerRef.current.appendChild(app.canvas);
-                }
-
-                if (imageData && width && height) {
-                    const canvas = document.createElement("canvas");
-                    canvas.width = width;
-                    canvas.height = height;
-                    const ctx = canvas.getContext("2d");
-
-                    // 创建灰度图像数据
-                    const imgData = ctx.createImageData(width, height);
-                    for (let i = 0; i < imageData.length; i++) {
-                        const value = imageData[i];
-                        const idx = i * 4;
-                        imgData.data[idx] = value;     // R
-                        imgData.data[idx + 1] = value; // G
-                        imgData.data[idx + 2] = value; // B
-                        imgData.data[idx + 3] = 255;   // A
-                    }
-
-                    ctx.putImageData(imgData, 0, 0);
-
-                    // 更新或创建精灵
-                    const texture = PIXI.Texture.from(canvas);
-                    
-                    if (spriteRef.current) {
-                        spriteRef.current.texture = texture;
-                    } else {
-                        const sprite = new PIXI.Sprite(texture);
-                        const scaleX = pixiAppRef.current.screen.width / width;
-                        const scaleY = pixiAppRef.current.screen.height / height;
-                        const scale = Math.min(scaleX, scaleY) * 0.9;
-
-                        sprite.scale.set(scale);
-                        sprite.x = pixiAppRef.current.screen.width / 2;
-                        sprite.y = pixiAppRef.current.screen.height / 2;
-                        sprite.anchor.set(0.5);
-                        sprite.interactive = true;
-                        sprite.cursor = "pointer";
-
-                        pixiAppRef.current.stage.addChild(sprite);
-                        spriteRef.current = sprite;
-                    }
-                }
-            } catch (error) {
-                console.error("Error updating PixiJS:", error);
-            }
-        };
-
-        updatePixiApp();
-
-        return () => {
-            if (pixiAppRef.current) {
-                pixiAppRef.current.destroy(true, {
-                    children: true,
-                    texture: true,
-                    baseTexture: true,
-                });
-                pixiAppRef.current = null;
-            }
-        };
-    }, [imageData, width, height]);
-
     return (
         <div
             ref={pixiContainerRef}
@@ -148,10 +172,7 @@ const ImageViewer = forwardRef(({
 ImageViewer.displayName = "ImageViewer";
 ImageViewer.propTypes = {
     showOverlay: PropTypes.bool,
-    isDrawingEnabled: PropTypes.bool,
-    imageData: PropTypes.instanceOf(Uint8Array),
-    width: PropTypes.number,
-    height: PropTypes.number,
+    isDrawingEnabled: PropTypes.bool
 };
 
 export default ImageViewer;

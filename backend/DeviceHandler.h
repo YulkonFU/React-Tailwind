@@ -47,7 +47,22 @@ private:
     // 监控线程函数
     void MonitorThreadFunc();
 
+    // 图像缓冲区
+    struct SharedImageBuffer {
+        std::unique_ptr<WORD[]> buffer;
+        SIZE_T width;
+        SIZE_T height;
+        HANDLE mappingHandle;
+        LPVOID mappedAddress;
+    };
 
+    SharedImageBuffer m_imageBuffer;
+    bool m_isLiveMode;
+    static void CALLBACK EndFrameCallback(CDigGrabber& digGrabber);
+
+    // 创建共享内存
+    bool CreateSharedBuffer(SIZE_T width, SIZE_T height);
+    void CleanupSharedBuffer();
 
 public:
     DeviceHandler();
@@ -85,4 +100,15 @@ public:
     HRESULT GetCncStatus(VARIANT* pResult);
     HRESULT GetAxesInfo(VARIANT* pResult);
     HRESULT GetPositions(VARIANT* pResult);
+
+    // Detector Control Methods
+    HRESULT InitializeDetector();
+    HRESULT StartLive();
+    HRESULT StopLive();
+    HRESULT SetGain(UINT gainStep);
+    HRESULT SetFPS(UINT timing);
+    HRESULT GetDetectorStatus(VARIANT* pResult);
+
+    // 添加共享内存读取方法
+    HRESULT ReadSharedMemory(BSTR name, UINT size, VARIANT* pResult);
 };
