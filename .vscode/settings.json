@@ -68,7 +68,8 @@
     "xtr1common": "cpp",
     "xutility": "cpp",
     "iomanip": "cpp",
-    "fstream": "cpp"
+    "fstream": "cpp",
+    "*.rh": "cpp"
   },
   "C_Cpp_Runner.cCompilerPath": "gcc",
   "C_Cpp_Runner.cppCompilerPath": "g++",

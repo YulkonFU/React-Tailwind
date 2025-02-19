@@ -3,14 +3,161 @@
 #include <wrl.h>
 #include <wil/com.h>
 #include <WebView2.h>
-#include "DeviceHandler.h"  // 替换原有的Handler头文件
+#include "DeviceHandler.h"
 #include <ShellScalingApi.h>
+#include <string>
+#include <vector>
+#include <atlenc.h>
+
+// 添加库链接
+#pragma comment(lib, "crypt32.lib")
 
 using namespace Microsoft::WRL;
 
 #define MAX_LOADSTRING 100
 
-// Global Variables:
+// 图像数据结构
+struct ImageData {
+    std::vector<BYTE> data;
+    UINT width;
+    UINT height;
+    ImageData() : width(640), height(480) {
+        data.resize(width * height * 4);
+    }
+};
+
+// ImageHandler 类定义
+class ImageHandler : public Microsoft::WRL::RuntimeClass<
+    Microsoft::WRL::RuntimeClassFlags<Microsoft::WRL::ClassicCom>,
+    IDispatch> {
+private:
+    ImageData imageData;
+
+    std::wstring ConvertToWString(const std::string& str) {
+        if (str.empty()) return std::wstring();
+        int size = MultiByteToWideChar(CP_UTF8, 0, &str[0], (int)str.size(), NULL, 0);
+        std::wstring result(size, 0);
+        MultiByteToWideChar(CP_UTF8, 0, &str[0], (int)str.size(), &result[0], size);
+        return result;
+    }
+
+    void GenerateGradientImage() {
+        for (UINT y = 0; y < imageData.height; y++) {
+            for (UINT x = 0; x < imageData.width; x++) {
+                UINT index = (y * imageData.width + x) * 4;
+                float normalizedX = (float)x / imageData.width;
+                float normalizedY = (float)y / imageData.height;
+
+                imageData.data[index] = (BYTE)(255 * normalizedX);     // R
+                imageData.data[index + 1] = (BYTE)(255 * normalizedY); // G
+                imageData.data[index + 2] = (BYTE)(255 * (1 - normalizedX)); // B
+                imageData.data[index + 3] = 255;                       // A
+            }
+        }
+    }
+
+    HRESULT EncodeBase64(const std::vector<BYTE>& data, std::string& base64Str) {
+        int base64Len = Base64EncodeGetRequiredLength(data.size());
+        base64Str.resize(base64Len);
+
+        BOOL result = Base64Encode(
+            data.data(),
+            data.size(),
+            &base64Str[0],
+            &base64Len,
+            ATL_BASE64_FLAG_NOCRLF
+        );
+
+        if (!result) {
+            return E_FAIL;
+        }
+
+        base64Str.resize(base64Len);
+        return S_OK;
+    }
+
+    HRESULT CreateSafeArray(VARIANT* pResult) {
+        std::string base64Str;
+        HRESULT hr = EncodeBase64(imageData.data, base64Str);
+        if (FAILED(hr)) return hr;
+
+        SAFEARRAYBOUND bounds[1];
+        bounds[0].lLbound = 0;
+        bounds[0].cElements = 3;
+        SAFEARRAY* psa = SafeArrayCreate(VT_VARIANT, 1, bounds);
+        if (!psa) return E_OUTOFMEMORY;
+
+        try {
+            LONG index = 0;
+            VARIANT var;
+            VariantInit(&var);
+            var.vt = VT_BSTR;
+            var.bstrVal = SysAllocString(ConvertToWString(base64Str).c_str());
+            hr = SafeArrayPutElement(psa, &index, &var);
+            if (FAILED(hr)) throw hr;
+            VariantClear(&var);
+
+            index = 1;
+            var.vt = VT_UI4;
+            var.ulVal = imageData.width;
+            hr = SafeArrayPutElement(psa, &index, &var);
+            if (FAILED(hr)) throw hr;
+
+            index = 2;
+            var.vt = VT_UI4;
+            var.ulVal = imageData.height;
+            hr = SafeArrayPutElement(psa, &index, &var);
+            if (FAILED(hr)) throw hr;
+
+            pResult->vt = VT_ARRAY | VT_VARIANT;
+            pResult->parray = psa;
+            return S_OK;
+        }
+        catch (HRESULT hr) {
+            SafeArrayDestroy(psa);
+            return hr;
+        }
+    }
+
+public:
+    ImageHandler() {
+        GenerateGradientImage();
+    }
+
+    STDMETHOD(GetTypeInfoCount)(UINT* pctinfo) override {
+        *pctinfo = 0;
+        return S_OK;
+    }
+
+    STDMETHOD(GetTypeInfo)(UINT iTInfo, LCID lcid, ITypeInfo** ppTInfo) override {
+        return E_NOTIMPL;
+    }
+
+    STDMETHOD(GetIDsOfNames)(REFIID riid, LPOLESTR* rgszNames, UINT cNames,
+        LCID lcid, DISPID* rgDispId) override {
+        if (!rgszNames || !rgDispId) return E_INVALIDARG;
+
+        if (cNames == 1 && wcscmp(rgszNames[0], L"getImageData") == 0) {
+            rgDispId[0] = 1;
+            return S_OK;
+        }
+
+        return DISP_E_UNKNOWNNAME;
+    }
+
+    STDMETHOD(Invoke)(DISPID dispIdMember, REFIID riid, LCID lcid,
+        WORD wFlags, DISPPARAMS* pDispParams, VARIANT* pVarResult,
+        EXCEPINFO* pExcepInfo, UINT* puArgErr) override
+    {
+        if (dispIdMember == 1) {
+            if (!pVarResult) return E_POINTER;
+            return CreateSafeArray(pVarResult);
+        }
+        return DISP_E_MEMBERNOTFOUND;
+    }
+};
+
+// Global Variables
 HINSTANCE hInst;
 WCHAR szTitle[MAX_LOADSTRING];
 WCHAR szWindowClass[MAX_LOADSTRING];
@@ -18,7 +165,8 @@ WCHAR szWindowClass[MAX_LOADSTRING];
 // WebView2 Globals
 wil::com_ptr<ICoreWebView2Controller> webViewController;
 wil::com_ptr<ICoreWebView2> webViewWindow;
-ComPtr<DeviceHandler> deviceHandler;  // 替换为单一的deviceHandler
+ComPtr<DeviceHandler> deviceHandler;
+ComPtr<ImageHandler> imageHandler;
 
 // Function declarations
 ATOM                MyRegisterClass(HINSTANCE hInstance);
@@ -158,21 +306,18 @@ void InitializeWebView2(HWND hWnd) {
                             settings->put_IsWebMessageEnabled(TRUE);
                             settings->put_AreDevToolsEnabled(TRUE);
 
-                            
-                            // 注册 DeviceHandler
                             try {
+                                // 创建并注册 DeviceHandler
                                 deviceHandler = Microsoft::WRL::Make<DeviceHandler>();
                                 if (!deviceHandler) {
                                     OutputDebugString(L"Failed to create DeviceHandler\n");
                                     return E_FAIL;
                                 }
 
-                                // 添加为同步对象
                                 VARIANT var;
                                 VariantInit(&var);
                                 var.vt = VT_DISPATCH;
                                 var.pdispVal = deviceHandler.Get();
-
                                 HRESULT hr = webViewWindow->AddHostObjectToScript(L"deviceHandler", &var);
                                 VariantClear(&var);
 
@@ -181,17 +326,28 @@ void InitializeWebView2(HWND hWnd) {
                                     return hr;
                                 }
 
-                                OutputDebugString(L"Successfully registered deviceHandler\n");
-
-                                // 成功注册后，再启动监控
-                                try {
-                                    deviceHandler->StartMonitoring(webViewWindow.get());
-                                    OutputDebugString(L"Successfully started monitoring\n");
-                                }
-                                catch (const std::exception& e) {
-                                    OutputDebugStringA(("Failed to start monitoring: " + std::string(e.what())).c_str());
+                                // 创建并注册 ImageHandler
+                                imageHandler = Microsoft::WRL::Make<ImageHandler>();
+                                if (!imageHandler) {
+                                    OutputDebugString(L"Failed to create ImageHandler\n");
                                     return E_FAIL;
                                 }
+
+                                VARIANT varImage;
+                                VariantInit(&varImage);
+                                varImage.vt = VT_DISPATCH;
+                                varImage.pdispVal = imageHandler.Get();
+                                hr = webViewWindow->AddHostObjectToScript(L"imageHandler", &varImage);
+                                VariantClear(&varImage);
+
+                                if (FAILED(hr)) {
+                                    OutputDebugString(L"Failed to register imageHandler\n");
+                                    return hr;
+                                }
+
+                                // 启动设备监控
+                                deviceHandler->StartMonitoring(webViewWindow.get());
+                                OutputDebugString(L"Successfully started monitoring\n");
 
                                 // 设置窗口大小
                                 RECT bounds;
@@ -207,19 +363,9 @@ void InitializeWebView2(HWND hWnd) {
                                 return E_FAIL;
                             }
                             catch (...) {
-                                OutputDebugString(L"Unknown exception during DeviceHandler creation\n");
+                                OutputDebugString(L"Unknown exception during handlers creation\n");
                                 return E_FAIL;
                             }
-
-
-                            // 设置窗口大小
-                            RECT bounds;
-                            GetClientRect(hWnd, &bounds);
-                            controller->put_Bounds(bounds);
-
-                            // 导航到本地页面
-                            webViewWindow->Navigate(L"http://localhost:5173/");
-                            return S_OK;
                         }).Get());
                 return S_OK;
             }).Get());
