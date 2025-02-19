@@ -12,7 +12,7 @@ const char* GetXrayStateString(CXray::XR_STATE state);
 const char* GetCncStateString(CNCZustand state);
 
 DeviceHandler::DeviceHandler() : m_xray(nullptr), m_cnc(nullptr),
-m_hXrayDll(nullptr), m_hCncDll(nullptr), positions(nullptr), axisCount(0), m_isMonitoring(false),m_isLiveMode(false)  
+m_hXrayDll(nullptr), m_hCncDll(nullptr), positions(nullptr), axisCount(0), m_isMonitoring(false), m_isLiveMode(false)
 {
 	try {
 		// Initialize Xray
@@ -331,7 +331,7 @@ STDMETHODIMP DeviceHandler::Invoke(DISPID dispIdMember, REFIID riid, LCID lcid,
 					return S_OK;
 				}
 
-				
+
 			case 116: // positionReached
 				if (!m_cnc || !pDispParams || pDispParams->cArgs != 0) return E_INVALIDARG;
 				{
@@ -418,7 +418,7 @@ STDMETHODIMP DeviceHandler::Invoke(DISPID dispIdMember, REFIID riid, LCID lcid,
 			return GetXrayStatus(pVarResult);
 
 
-		// CNC方法 (101-110)
+			// CNC方法 (101-110)
 		case 101: // initializeCnc
 			isAsyncOperation = true;
 			future = std::async(std::launch::async, [this]() -> HRESULT {
@@ -445,7 +445,7 @@ STDMETHODIMP DeviceHandler::Invoke(DISPID dispIdMember, REFIID riid, LCID lcid,
 			return GetPositions(pVarResult);
 
 
-		// Detector方法 (201-210)
+			// Detector方法 (201-210)
 		case 201: // initializeDetector
 		{
 			OutputDebugString(L"Invoke: initializeDetector called\n");
@@ -554,7 +554,7 @@ STDMETHODIMP DeviceHandler::GetIDsOfNames(REFIID riid, LPOLESTR* rgszNames,
 		{L"getPositions", 109},
 
 		// 添加Detector相关方法
-		{L"initializeDetector", 201},  
+		{L"initializeDetector", 201},
 		{L"startLive", 202},
 		{L"stopLive", 203},
 		{L"gain", 204},        // 属性
@@ -1079,31 +1079,15 @@ HRESULT DeviceHandler::StartLive() {
 
 		OutputDebugString(L"StartLive: Setting acquisition data...\n");
 		m_isLiveMode = true;
-		m_dig->SetAcqData(this);  // 这里是关键，设置正确的this指针
+		// 将 this 指针设为采集数据的宿主
+		m_dig->SetAcqData(this);
 
-		// 在 StartLive 方法中添加测试回调
-		auto testCallback = [](CDigGrabber& digGrabber) {
-			OutputDebugString(L"TestCallback: Frame received!\n");
-			};
-
-		// 先用测试回调测试
+		// 去除“测试回调”，只保留真正的回调
 		if (!m_dig->SetCallbacksAndMessages(
 			nullptr,
 			0,
 			0,
-			testCallback,  // 使用测试回调
-			nullptr
-		)) {
-			OutputDebugString(L"StartLive: Failed to set test callback\n");
-			return E_FAIL;
-		}
-
-		// 确保回调已设置
-		if (!m_dig->SetCallbacksAndMessages(
-			nullptr,
-			0,
-			0,
-			EndFrameCallback,  // 确保这个回调已经设置
+			EndFrameCallback,
 			nullptr
 		)) {
 			OutputDebugString(L"StartLive: Failed to set callbacks\n");

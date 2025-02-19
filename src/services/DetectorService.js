@@ -1,6 +1,8 @@
 // services/DetectorService.js
 class DetectorService {
   constructor() {
+    console.log("DetectorService constructor called"); // 添加调试信息
+
     this.isInitialized = false;
     this.frameCallback = null;
     this.isProcessingFrame = false;
@@ -15,10 +17,18 @@ class DetectorService {
 
   // DetectorService.js 中的 setupMessageListener 方法
   setupMessageListener() {
+    console.log("setupMessageListener called"); // 添加调试信息
+
     window.chrome?.webview?.addEventListener("message", async (event) => {
       try {
         console.log("Received message:", event.data);
-        const message = JSON.parse(event.data);
+        let message;
+        try {
+          message = JSON.parse(event.data);
+        } catch (e) {
+          console.error("Failed to parse message:", event.data, e);
+          return;
+        }
 
         if (message.type === "newFrame" && !this.isProcessingFrame) {
           this.isProcessingFrame = true;
@@ -225,4 +235,4 @@ class DetectorService {
   }
 }
 
-export const detectorService = new DetectorService();
+export default DetectorService;

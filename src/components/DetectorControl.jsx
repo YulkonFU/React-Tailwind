@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { detectorService } from "../services/DetectorService";
+import DetectorService from "../services/DetectorService";
 import {
   Play,
   Square,
@@ -75,7 +75,17 @@ const DetectorControl = () => {
     const initDetector = async () => {
       try {
         const handler = window.chrome?.webview?.hostObjects?.deviceHandler;
-        if (!handler) return;
+        if (!handler) {
+          console.error("Device handler not available");
+          return;
+        }
+
+        const detectorService = new DetectorService();
+        // 确保 detectorService 存在
+        if (!detectorService) {
+          console.error("Detector service is not available");
+          return;
+        }
 
         // 直接调用方法
         await handler.initializeDetector;
@@ -108,6 +118,7 @@ const DetectorControl = () => {
   const toggleLive = async () => {
     try {
       if (!acquisitionState.isLive) {
+        const detectorService = new DetectorService();
         // 使用 detectorService 而不是直接调用 handler
         try {
           // 设置 FPS
@@ -120,6 +131,7 @@ const DetectorControl = () => {
           throw error;
         }
       } else {
+        const detectorService = new DetectorService();
         await detectorService.stopLive();
       }
 
@@ -135,6 +147,7 @@ const DetectorControl = () => {
   // 同样修改 FPS 控制
   const handleFpsChange = async (value) => {
     try {
+      const detectorService = new DetectorService();
       await detectorService.setFPS(value);
       setAcquisitionState((prev) => ({
         ...prev,
@@ -148,6 +161,7 @@ const DetectorControl = () => {
   // 修改增益控制
   const handleGainChange = async (value) => {
     try {
+      const detectorService = new DetectorService();
       await detectorService.setGain(value);
       setAcquisitionState((prev) => ({
         ...prev,
@@ -196,6 +210,7 @@ const DetectorControl = () => {
   // 新增事件发布
   useEffect(() => {
     window.chrome?.webview?.addEventListener("message", (event) => {
+      console.log("New message from native code:", event.data);
       const message = JSON.parse(event.data);
       if (message.type === "newFrame") {
         // 发布新帧事件,供主窗口处理

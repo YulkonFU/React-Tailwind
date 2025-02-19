@@ -3,7 +3,7 @@ import { useEffect, useRef, forwardRef, useState, useImperativeHandle } from "re
 import * as PIXI from "pixi.js";
 import PropTypes from "prop-types";
 import OverlayCanvas from "./OverlayCanvas";
-import { detectorService } from "../services/DetectorService";
+import DetectorService from "../services/DetectorService";
 
 const ImageViewer = forwardRef(({ 
   showOverlay: initialShowOverlay = true, 
@@ -57,6 +57,7 @@ const ImageViewer = forwardRef(({
 
     // 设置探测器服务回调
     useEffect(() => {
+        const detectorService = new DetectorService();
         detectorService.onNewFrame((imageData, width, height) => {
             setImageState({
                 data: imageData,

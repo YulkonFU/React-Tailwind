@@ -6,6 +6,8 @@ const App = () => {
   useEffect(() => {
     // 检查 WebView2 环境
     if (window.chrome && window.chrome.webview) {
+      console.log("WebView2 环境已初始化");
+
       // 发送消息到后端
       window.chrome.webview.postMessage("Hello from React!");
 
@@ -15,12 +17,14 @@ const App = () => {
       });
     } else {
       console.warn("WebView2 环境未初始化");
+      // 显示错误信息
+      alert("WebView2 环境未初始化，请确保应用运行在 WebView2 环境中。");
     }
   }, []);
 
   return (
     <div className="App">
-      <XactLayout />
+      <XactLayout /> {/* 确保 DetectorControl 被正确渲染 */}
     </div>
   );
 };
